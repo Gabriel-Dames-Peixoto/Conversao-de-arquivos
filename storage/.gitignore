@@ -1,0 +1,6 @@
+uploads/*
+exports/*
+sessions/*
+!uploads/.gitignore
+!exports/.gitignore
+!sessions/.gitignore

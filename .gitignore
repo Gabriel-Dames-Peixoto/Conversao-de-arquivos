@@ -1,0 +1,9 @@
+/storage/uploads/*
+/storage/exports/*
+/storage/sessions/*
+/storage/test-fixtures/*
+/storage/test-suite-fixtures/*
+/storage/verify-fixtures/*
+!/storage/uploads/.gitignore
+!/storage/exports/.gitignore
+!/storage/sessions/.gitignore
