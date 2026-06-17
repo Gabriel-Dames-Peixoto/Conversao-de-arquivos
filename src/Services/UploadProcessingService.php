@@ -10,6 +10,7 @@ use App\Repositories\ConversionRunRepository;
 use App\Repositories\NormalizedDataRepository;
 use App\Repositories\ProcessingLogRepository;
 use App\Repositories\UploadedFileRepository;
+use App\Support\ReadabilityAnalyzer;
 use PDOException;
 use Throwable;
 
@@ -63,6 +64,7 @@ final class UploadProcessingService
             $logRepository->create($uploadId, 'detection', 'success', 'Tipo de arquivo identificado.', $detection);
 
             $conversionResult = $conversionService->convert($storedFile['storage_path'], $detection, $storedFile['original_filename']);
+            $conversionResult = $this->attachReadabilityAnalysis($conversionResult);
 
             if ($conversionResult['normalized_data'] !== null) {
                 $normalizedRepository->replaceForUpload($uploadId, $conversionResult['normalized_data']);
@@ -122,6 +124,33 @@ final class UploadProcessingService
                 ? $exception
                 : new ApplicationException('Falha ao processar o arquivo: ' . $exception->getMessage());
         }
+    }
+
+    private function attachReadabilityAnalysis(array $conversionResult): array
+    {
+        if (($conversionResult['normalized_data'] ?? null) === null) {
+            return $conversionResult;
+        }
+
+        $analyzer = new ReadabilityAnalyzer($this->appConfig['manual_review_fields'] ?? []);
+        $manualReview = $analyzer->analyze($conversionResult['normalized_data'], $conversionResult);
+
+        $conversionResult['normalized_data']['metadata']['manual_review'] = $manualReview;
+        $conversionResult['metadata']['manual_review'] = $manualReview;
+
+        if (($manualReview['required'] ?? false) === true) {
+            $conversionResult['warnings'][] = 'Existem campos com baixa confianca de leitura. Revise e preencha manualmente as areas indicadas.';
+
+            if ($conversionResult['status'] === 'processed') {
+                $conversionResult['status'] = 'processed_with_warning';
+            }
+
+            $conversionResult['message'] .= ' Revise os campos indicados antes da exportacao final.';
+        }
+
+        $conversionResult['warnings'] = array_values(array_unique($conversionResult['warnings']));
+
+        return $conversionResult;
     }
 
     private function markUploadAsFailed(?int $uploadId, string $message): void

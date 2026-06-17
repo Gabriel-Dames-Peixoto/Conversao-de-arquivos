@@ -10,6 +10,7 @@ use App\Repositories\ConversionRunRepository;
 use App\Repositories\ProcessingLogRepository;
 use App\Repositories\UploadedFileRepository;
 use App\Services\ExportService;
+use App\Services\ManualReviewService;
 
 $databaseError = $bootstrap['database_error'];
 
@@ -35,6 +36,27 @@ if ($upload === null) {
 }
 
 $normalized = $normalizedRepository->findByUploadId($uploadId);
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'manual_review') {
+    try {
+        $manualFields = is_array($_POST['manual_fields'] ?? null) ? $_POST['manual_fields'] : [];
+        $reviewResult = (new ManualReviewService())->save($upload, $manualFields);
+
+        $_SESSION['flash'] = [
+            'type' => $reviewResult['status'] === 'reviewed' ? 'success' : 'warning',
+            'message' => $reviewResult['message'],
+        ];
+    } catch (\Throwable $exception) {
+        $_SESSION['flash'] = [
+            'type' => 'error',
+            'message' => 'Falha ao salvar a revisao manual: ' . $exception->getMessage(),
+        ];
+    }
+
+    header('Location: file.php?id=' . $uploadId);
+    exit;
+}
+
 $logs = $logRepository->forUpload($uploadId);
 $exports = $exportRepository->forUpload($uploadId);
 $conversionRuns = $conversionRunRepository->forUpload($uploadId);
@@ -43,6 +65,20 @@ unset($_SESSION['flash']);
 $previewRows = $bootstrap['app_config']['preview_rows'];
 $rows = $normalized['rows'] ?? [];
 $columns = $normalized['columns'] ?? [];
+$manualReview = is_array($normalized['metadata']['manual_review'] ?? null) ? $normalized['metadata']['manual_review'] : null;
+$reviewFields = is_array($manualReview['fields'] ?? null) ? $manualReview['fields'] : [];
+$reviewIssues = is_array($manualReview['issues'] ?? null) ? $manualReview['issues'] : [];
+$reviewCellMap = [];
+
+foreach ($reviewFields as $field) {
+    if (!is_array($field) || ($field['type'] ?? '') !== 'cell') {
+        continue;
+    }
+
+    $reviewCellMap[((int) ($field['row_index'] ?? -1)) . '|' . (string) ($field['column'] ?? '')] = true;
+}
+
+$reviewConfidence = $manualReview !== null ? (int) round(((float) ($manualReview['confidence'] ?? 0)) * 100) : null;
 $exportFormats = [
     'csv' => ['label' => 'Exportar CSV', 'available' => ExportService::isFormatAvailable('csv')],
     'json' => ['label' => 'Exportar JSON', 'available' => ExportService::isFormatAvailable('json')],
@@ -99,6 +135,81 @@ $exportFormats = [
         <?php endif; ?>
     </section>
 
+    <?php if ($manualReview !== null && ($manualReview['required'] ?? false) === true): ?>
+        <section class="panel review-panel">
+            <div class="panel-header">
+                <div>
+                    <p class="eyebrow">Revisao manual</p>
+                    <h2>Areas com baixa confianca de leitura</h2>
+                </div>
+                <span class="badge badge-<?= ($manualReview['status'] ?? '') === 'reviewed' ? 'reviewed' : 'warning'; ?>">
+                    <?= ($manualReview['status'] ?? '') === 'reviewed' ? 'revisado' : 'pendente'; ?>
+                </span>
+            </div>
+
+            <div class="review-summary">
+                <div>
+                    <strong>Confianca estimada</strong>
+                    <span><?= (int) $reviewConfidence; ?>%</span>
+                </div>
+                <p><?= htmlspecialchars((string) ($manualReview['summary'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></p>
+            </div>
+
+            <?php if ($reviewIssues !== []): ?>
+                <div class="issue-list">
+                    <?php foreach (array_slice($reviewIssues, 0, 8) as $issue): ?>
+                        <?php if (is_array($issue)): ?>
+                            <article>
+                                <strong><?= htmlspecialchars((string) ($issue['area'] ?? 'Area nao identificada'), ENT_QUOTES, 'UTF-8'); ?></strong>
+                                <span><?= htmlspecialchars((string) ($issue['reason'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></span>
+                            </article>
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+
+            <form action="file.php?id=<?= (int) $uploadId; ?>" method="post" class="manual-review-form">
+                <input type="hidden" name="action" value="manual_review">
+
+                <div class="manual-fields-grid">
+                    <?php foreach ($reviewFields as $field): ?>
+                        <?php
+                        if (!is_array($field)) {
+                            continue;
+                        }
+
+                        $fieldKey = (string) ($field['key'] ?? '');
+                        $fieldValue = (string) ($field['manual_value'] ?? '');
+                        $fieldReadValue = (string) ($field['current_value'] ?? '');
+                        $isLongField = ($field['type'] ?? '') === 'document_field' && $fieldKey === 'document_summary';
+                        ?>
+                        <label class="manual-field <?= ($field['resolved'] ?? false) ? 'is-resolved' : ''; ?>">
+                            <span>
+                                <?= htmlspecialchars((string) ($field['label'] ?? $fieldKey), ENT_QUOTES, 'UTF-8'); ?>
+                                <?php if (($field['required'] ?? false) === true): ?>
+                                    <small>obrigatorio</small>
+                                <?php endif; ?>
+                            </span>
+                            <?php if ($isLongField): ?>
+                                <textarea name="manual_fields[<?= htmlspecialchars($fieldKey, ENT_QUOTES, 'UTF-8'); ?>]" rows="4"><?= htmlspecialchars($fieldValue, ENT_QUOTES, 'UTF-8'); ?></textarea>
+                            <?php else: ?>
+                                <input type="text" name="manual_fields[<?= htmlspecialchars($fieldKey, ENT_QUOTES, 'UTF-8'); ?>]" value="<?= htmlspecialchars($fieldValue, ENT_QUOTES, 'UTF-8'); ?>">
+                            <?php endif; ?>
+                            <em>
+                                <?= htmlspecialchars((string) ($field['reason'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
+                                <?php if ($fieldReadValue !== '' && $fieldValue === ''): ?>
+                                    <br>Valor lido: <?= htmlspecialchars($fieldReadValue, ENT_QUOTES, 'UTF-8'); ?>
+                                <?php endif; ?>
+                            </em>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
+
+                <button type="submit">Salvar revisao manual</button>
+            </form>
+        </section>
+    <?php endif; ?>
+
     <section class="panel">
         <div class="panel-header">
             <h2>Previa dos dados normalizados</h2>
@@ -130,10 +241,11 @@ $exportFormats = [
                     </tr>
                     </thead>
                     <tbody>
-                    <?php foreach (array_slice($rows, 0, $previewRows) as $row): ?>
+                    <?php foreach (array_slice($rows, 0, $previewRows, true) as $rowIndex => $row): ?>
                         <tr>
                             <?php foreach ($columns as $column): ?>
-                                <td><?= htmlspecialchars((string) ($row[$column] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                                <?php $needsReview = isset($reviewCellMap[((int) $rowIndex) . '|' . (string) $column]); ?>
+                                <td class="<?= $needsReview ? 'cell-needs-review' : ''; ?>"><?= htmlspecialchars((string) ($row[$column] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
                             <?php endforeach; ?>
                         </tr>
                     <?php endforeach; ?>

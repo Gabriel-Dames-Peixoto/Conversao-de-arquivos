@@ -11,6 +11,7 @@ O projeto foi criado para:
 - registrar todo o processamento no MySQL
 - converter formatos suportados para um padrao interno normalizado
 - exibir previa dos dados quando houver conversao
+- apontar areas com baixa confianca de leitura e solicitar preenchimento manual
 - exportar os dados normalizados novamente
 
 Arquivos sem conversor continuam sendo aceitos e registrados com status `unsupported`, sem derrubar o sistema.
@@ -23,8 +24,9 @@ Arquivos sem conversor continuam sendo aceitos e registrados com status `unsuppo
 4. O tipo do arquivo e detectado.
 5. O conversor adequado e escolhido.
 6. Os dados sao normalizados quando possivel.
-7. O sistema mostra previa, historico e registros da conversao.
-8. Os dados podem ser exportados novamente.
+7. O sistema avalia a confianca da leitura e cria uma revisao manual quando necessario.
+8. O sistema mostra previa, historico, registros da conversao e campos pendentes.
+9. Os dados podem ser exportados novamente depois dos ajustes manuais.
 
 ## Stack
 
@@ -82,7 +84,7 @@ Convertidos para o padrao interno:
 Aceitos e registrados, mas com conversao parcial ou dependente do ambiente:
 
 - XLSX: importacao e exportacao dependem da extensao `zip` do PHP
-- PDF escaneado: e aceito, mas pode exigir OCR quando nao houver texto extraivel
+- PDF escaneado: e aceito, marcado para revisao manual quando nao houver texto extraivel e preparado para receber dados preenchidos pelo usuario
 
 Aceitos, registrados e ainda nao convertidos:
 
@@ -99,6 +101,7 @@ O sistema trata explicitamente:
 - XML invalido
 - CSV com separadores diferentes
 - PDF sem texto extraivel
+- areas com baixa confianca de leitura em arquivos enviados ou escaneados
 - extensao desconhecida
 - erro ao salvar no banco
 - erro ao exportar
@@ -108,6 +111,7 @@ Comportamento esperado:
 - a falha e registrada com status apropriado
 - o sistema nao exibe stack trace crua para o usuario
 - uploads nao suportados continuam rastreaveis
+- campos duvidosos ficam visiveis na tela de detalhes e podem ser corrigidos manualmente
 - se o banco falhar depois do salvamento do arquivo, o upload fisico e limpo para evitar arquivo orfao
 
 ## Estrutura principal
@@ -155,9 +159,13 @@ Ja validado neste ambiente:
 - importacao de CSV, JSON, XML e TXT
 - fallback `unsupported` para extensao desconhecida
 - processamento de PDF com aviso de OCR quando necessario
-- exportacao para CSV, JSON e XML
+- exportacao para CSV, JSON, XML e XLSX quando `ZipArchive` esta habilitado no PHP do Apache
+
+Implementado no fluxo atual:
+
+- revisao manual para areas de baixa confianca, incluindo PDF escaneado sem texto extraivel
 
 Limitacoes atuais:
 
-- exportacao XLSX segue indisponivel no ambiente atual sem a extensao `zip`
+- importacao e exportacao XLSX ficam indisponiveis em ambientes PHP sem a extensao `zip`/`ZipArchive`
 - conversao completa de XLS ainda nao foi implementada

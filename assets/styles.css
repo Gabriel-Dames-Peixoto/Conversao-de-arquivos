@@ -184,7 +184,8 @@ th {
 }
 
 .badge-processed,
-.badge-success {
+.badge-success,
+.badge-reviewed {
     background: var(--brand-soft);
     color: var(--brand);
 }
@@ -208,12 +209,20 @@ th {
     font-weight: 600;
 }
 
-.alert-success {
+.alert-success,
+.alert.success {
     background: var(--brand-soft);
     color: var(--brand);
 }
 
-.alert-error {
+.alert-warning,
+.alert.warning {
+    background: var(--warning-soft);
+    color: var(--warning);
+}
+
+.alert-error,
+.alert.error {
     background: var(--danger-soft);
     color: var(--danger);
 }
@@ -268,6 +277,100 @@ th {
     margin-bottom: 20px;
 }
 
+.review-panel {
+    border-color: rgba(164, 87, 0, 0.3);
+}
+
+.review-summary {
+    display: grid;
+    grid-template-columns: minmax(180px, 240px) 1fr;
+    gap: 18px;
+    align-items: stretch;
+    margin-bottom: 18px;
+}
+
+.review-summary > div,
+.issue-list article,
+.manual-field {
+    background: var(--panel-strong);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 16px;
+}
+
+.review-summary strong,
+.manual-field span {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 700;
+}
+
+.review-summary span {
+    color: var(--warning);
+    font-size: 1.6rem;
+    font-weight: 800;
+}
+
+.review-summary p {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.6;
+}
+
+.issue-list,
+.manual-fields-grid {
+    display: grid;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.issue-list {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.issue-list article span,
+.manual-field em {
+    display: block;
+    color: var(--muted);
+    font-style: normal;
+    line-height: 1.5;
+}
+
+.manual-fields-grid {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.manual-field small {
+    margin-left: 8px;
+    color: var(--warning);
+    font-size: 0.78rem;
+}
+
+.manual-field input,
+.manual-field textarea {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #fff;
+    color: var(--text);
+    font: inherit;
+    margin-bottom: 8px;
+    padding: 11px 12px;
+}
+
+.manual-field textarea {
+    resize: vertical;
+}
+
+.manual-field.is-resolved {
+    border-color: rgba(11, 110, 79, 0.28);
+}
+
+.cell-needs-review {
+    background: var(--warning-soft);
+    box-shadow: inset 4px 0 0 var(--warning);
+}
+
 code {
     background: rgba(11, 110, 79, 0.08);
     color: var(--brand);
@@ -282,5 +385,9 @@ code {
 
     .panel-header {
         flex-direction: column;
+    }
+
+    .review-summary {
+        grid-template-columns: 1fr;
     }
 }

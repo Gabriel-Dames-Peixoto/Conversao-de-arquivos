@@ -12,4 +12,10 @@ return [
         'exports' => __DIR__ . '/../storage/exports',
     ],
     'export_formats' => ['csv', 'json', 'xml', 'xlsx'],
+    'manual_review_fields' => [
+        ['key' => 'document_summary', 'label' => 'Resumo ou informacoes principais', 'required' => true],
+        ['key' => 'document_identifier', 'label' => 'Numero ou identificador do documento', 'required' => false],
+        ['key' => 'document_date', 'label' => 'Data principal', 'required' => false],
+        ['key' => 'document_total', 'label' => 'Valor total', 'required' => false],
+    ],
 ];
