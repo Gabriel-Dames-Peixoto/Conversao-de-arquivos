@@ -4,10 +4,85 @@ declare(strict_types=1);
 
 $bootstrap = require __DIR__ . '/bootstrap.php';
 
-use App\Repositories\NormalizedDataRepository;
-use App\Repositories\ProcessingLogRepository;
 use App\Repositories\UploadedFileRepository;
 use App\Services\UploadProcessingService;
+
+function index_request_value(string $key): string
+{
+    $value = $_GET[$key] ?? '';
+
+    return is_array($value) ? '' : trim((string) $value);
+}
+
+function index_request_date(string $key): string
+{
+    $value = index_request_value($key);
+
+    return preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) === 1 ? $value : '';
+}
+
+function index_requested_limit(): int
+{
+    $limit = (int) ($_GET['limit'] ?? 30);
+    $allowed = [10, 20, 30, 50, 100];
+
+    return in_array($limit, $allowed, true) ? $limit : 30;
+}
+
+function index_url_with(array $overrides): string
+{
+    $parameters = $_GET;
+
+    foreach ($overrides as $key => $value) {
+        if ($value === null || $value === '') {
+            unset($parameters[$key]);
+            continue;
+        }
+
+        $parameters[$key] = (string) $value;
+    }
+
+    foreach ($parameters as $key => $value) {
+        if (is_array($value) || $value === null || $value === '') {
+            unset($parameters[$key]);
+        }
+    }
+
+    return 'index.php' . ($parameters === [] ? '' : '?' . http_build_query($parameters));
+}
+
+function index_has_filters(array $filters): bool
+{
+    foreach ($filters as $value) {
+        if ((string) $value !== '') {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function index_status_label(string $status): string
+{
+    $labels = [
+        'processed' => 'processado',
+        'processed_with_warning' => 'processado com aviso',
+        'failed' => 'falhou',
+        'unsupported' => 'nao suportado',
+        'archived_missing' => 'arquivado: arquivo ausente',
+        'reviewed' => 'revisado',
+        'pending' => 'pendente',
+    ];
+
+    return $labels[$status] ?? $status;
+}
+
+function index_badge_class(string $status): string
+{
+    $class = (string) preg_replace('/[^a-z0-9_-]+/i', '-', $status);
+
+    return $class === '' ? 'unknown' : $class;
+}
 
 $databaseError = $bootstrap['database_error'];
 $flash = $_SESSION['flash'] ?? null;
@@ -15,6 +90,30 @@ unset($_SESSION['flash']);
 
 $appConfig = $bootstrap['app_config'];
 $uploads = [];
+$typeOptions = [];
+$statusOptions = [];
+$filteredTotal = 0;
+$tabCounts = [
+    'active' => 0,
+    'archived' => 0,
+];
+$currentTab = index_request_value('tab') === 'archived' ? 'archived' : 'active';
+$limit = index_requested_limit();
+$filters = [
+    'date_from' => index_request_date('date_from'),
+    'date_to' => index_request_date('date_to'),
+    'name' => index_request_value('name'),
+    'type' => index_request_value('type'),
+    'status' => index_request_value('status'),
+];
+
+if ($filters['date_from'] !== '' && $filters['date_to'] !== '' && $filters['date_from'] > $filters['date_to']) {
+    $oldDateFrom = $filters['date_from'];
+    $filters['date_from'] = $filters['date_to'];
+    $filters['date_to'] = $oldDateFrom;
+}
+
+$hasActiveFilters = index_has_filters($filters);
 
 if ($databaseError === null) {
     $uploadRepository = new UploadedFileRepository();
@@ -42,7 +141,14 @@ if ($databaseError === null) {
         }
     }
 
-    $uploads = $uploadRepository->latest(30);
+    $uploads = $uploadRepository->search($filters, $limit, $currentTab);
+    $filteredTotal = $uploadRepository->countSearch($filters, $currentTab);
+    $tabCounts = [
+        'active' => $uploadRepository->countByTab('active'),
+        'archived' => $uploadRepository->countByTab('archived'),
+    ];
+    $typeOptions = $uploadRepository->listFilterValues('detected_type', $currentTab);
+    $statusOptions = $uploadRepository->listFilterValues('status', $currentTab);
 }
 ?>
 <!DOCTYPE html>
@@ -71,7 +177,7 @@ if ($databaseError === null) {
             </div>
             <div class="status-box">
                 <strong>Fallback seguro</strong>
-                <span>Arquivos nao suportados sao aceitos e marcados como unsupported</span>
+                <span>Arquivos sem conversor sao aceitos, diagnosticados e preservados com metadados</span>
             </div>
         </div>
     </section>
@@ -109,12 +215,119 @@ if ($databaseError === null) {
 
         <section class="panel">
             <div class="panel-header">
-                <h2>Arquivos enviados</h2>
-                <span><?= count($uploads); ?> registro(s) recente(s)</span>
+                <div>
+                    <p class="eyebrow">Organizacao dos arquivos</p>
+                    <h2><?= $currentTab === 'archived' ? 'Arquivos arquivados' : 'Arquivos enviados'; ?></h2>
+                </div>
+                <span><?= count($uploads); ?> exibido(s) de <?= (int) $filteredTotal; ?> encontrado(s)</span>
             </div>
 
+            <nav class="tabs" aria-label="Abas da listagem de arquivos">
+                <a
+                    class="tab-link <?= $currentTab === 'active' ? 'is-active' : ''; ?>"
+                    href="<?= htmlspecialchars(index_url_with(['tab' => 'active', 'type' => null, 'status' => null]), ENT_QUOTES, 'UTF-8'); ?>"
+                >
+                    Ativos
+                    <span><?= (int) $tabCounts['active']; ?></span>
+                </a>
+                <a
+                    class="tab-link <?= $currentTab === 'archived' ? 'is-active' : ''; ?>"
+                    href="<?= htmlspecialchars(index_url_with(['tab' => 'archived', 'type' => null, 'status' => null]), ENT_QUOTES, 'UTF-8'); ?>"
+                >
+                    Arquivados
+                    <span><?= (int) $tabCounts['archived']; ?></span>
+                </a>
+            </nav>
+
+            <form action="index.php" method="get" class="filter-form">
+                <input type="hidden" name="tab" value="<?= htmlspecialchars($currentTab, ENT_QUOTES, 'UTF-8'); ?>">
+
+                <div class="filter-grid">
+                    <label class="filter-field">
+                        <span>Periodo inicial</span>
+                        <input type="date" name="date_from" value="<?= htmlspecialchars($filters['date_from'], ENT_QUOTES, 'UTF-8'); ?>">
+                    </label>
+
+                    <label class="filter-field">
+                        <span>Periodo final</span>
+                        <input type="date" name="date_to" value="<?= htmlspecialchars($filters['date_to'], ENT_QUOTES, 'UTF-8'); ?>">
+                    </label>
+
+                    <label class="filter-field filter-field-wide">
+                        <span>Nome do arquivo</span>
+                        <input
+                            type="search"
+                            name="name"
+                            placeholder="Buscar pelo nome"
+                            value="<?= htmlspecialchars($filters['name'], ENT_QUOTES, 'UTF-8'); ?>"
+                        >
+                    </label>
+
+                    <label class="filter-field">
+                        <span>Tipo</span>
+                        <select name="type">
+                            <option value="">Todos</option>
+                            <?php foreach ($typeOptions as $typeOption): ?>
+                                <option value="<?= htmlspecialchars($typeOption, ENT_QUOTES, 'UTF-8'); ?>" <?= $filters['type'] === $typeOption ? 'selected' : ''; ?>>
+                                    <?= htmlspecialchars($typeOption, ENT_QUOTES, 'UTF-8'); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </label>
+
+                    <label class="filter-field">
+                        <span>Status</span>
+                        <select name="status">
+                            <option value="">Todos</option>
+                            <?php foreach ($statusOptions as $statusOption): ?>
+                                <option value="<?= htmlspecialchars($statusOption, ENT_QUOTES, 'UTF-8'); ?>" <?= $filters['status'] === $statusOption ? 'selected' : ''; ?>>
+                                    <?= htmlspecialchars(index_status_label($statusOption), ENT_QUOTES, 'UTF-8'); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </label>
+
+                    <label class="filter-field">
+                        <span>Qtd. exibida</span>
+                        <select name="limit">
+                            <?php foreach ([10, 20, 30, 50, 100] as $limitOption): ?>
+                                <option value="<?= $limitOption; ?>" <?= $limit === $limitOption ? 'selected' : ''; ?>>
+                                    <?= $limitOption; ?> por vez
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="filter-actions">
+                    <button type="submit">Aplicar filtros</button>
+                    <a
+                        class="button-secondary"
+                        href="<?= htmlspecialchars(index_url_with([
+                            'tab' => $currentTab,
+                            'date_from' => null,
+                            'date_to' => null,
+                            'name' => null,
+                            'type' => null,
+                            'status' => null,
+                            'limit' => null,
+                        ]), ENT_QUOTES, 'UTF-8'); ?>"
+                    >
+                        Limpar filtros
+                    </a>
+                </div>
+            </form>
+
             <?php if ($uploads === []): ?>
-                <p class="empty-state">Nenhum arquivo foi enviado ainda.</p>
+                <p class="empty-state">
+                    <?php if ($hasActiveFilters): ?>
+                        Nenhum arquivo foi encontrado com os filtros aplicados.
+                    <?php elseif ($currentTab === 'archived'): ?>
+                        Nenhum registro arquivado foi encontrado.
+                    <?php else: ?>
+                        Nenhum arquivo foi enviado ainda.
+                    <?php endif; ?>
+                </p>
             <?php else: ?>
                 <div class="table-wrapper">
                     <table>
@@ -131,14 +344,28 @@ if ($databaseError === null) {
                         </thead>
                         <tbody>
                         <?php foreach ($uploads as $upload): ?>
+                            <?php $status = (string) $upload['status']; ?>
                             <tr>
                                 <td>#<?= (int) $upload['id']; ?></td>
                                 <td><?= htmlspecialchars($upload['original_filename'], ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td><?= htmlspecialchars((string) $upload['detected_type'], ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td><?= htmlspecialchars((string) $upload['mime_type'], ENT_QUOTES, 'UTF-8'); ?></td>
-                                <td><span class="badge badge-<?= htmlspecialchars($upload['status'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($upload['status'], ENT_QUOTES, 'UTF-8'); ?></span></td>
+                                <td>
+                                    <span class="badge badge-<?= htmlspecialchars(index_badge_class($status), ENT_QUOTES, 'UTF-8'); ?>">
+                                        <?= htmlspecialchars(index_status_label($status), ENT_QUOTES, 'UTF-8'); ?>
+                                    </span>
+                                </td>
                                 <td><?= htmlspecialchars($upload['created_at'], ENT_QUOTES, 'UTF-8'); ?></td>
-                                <td><a class="text-link" href="file.php?id=<?= (int) $upload['id']; ?>">Ver detalhes</a></td>
+                                <td>
+                                    <?php if ($currentTab === 'archived'): ?>
+                                        <span class="text-muted">Registro arquivado</span>
+                                    <?php else: ?>
+                                        <div class="row-actions">
+                                            <a class="text-link" href="file.php?id=<?= (int) $upload['id']; ?>">Ver detalhes</a>
+                                            <a class="text-link" href="download.php?id=<?= (int) $upload['id']; ?>">Baixar</a>
+                                        </div>
+                                    <?php endif; ?>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                         </tbody>

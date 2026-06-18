@@ -35,6 +35,13 @@ if ($upload === null) {
     exit;
 }
 
+$uploadFileAvailable = is_file((string) ($upload['storage_path'] ?? ''));
+if ($upload['status'] === 'archived_missing' || !$uploadFileAvailable) {
+    http_response_code(404);
+    echo 'Arquivo removido da listagem porque o original nao esta mais disponivel.';
+    exit;
+}
+
 $normalized = $normalizedRepository->findByUploadId($uploadId);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'manual_review') {
@@ -102,7 +109,15 @@ $exportFormats = [
                 <p class="eyebrow">Detalhe do processamento</p>
                 <h1><?= htmlspecialchars($upload['original_filename'], ENT_QUOTES, 'UTF-8'); ?></h1>
             </div>
-            <a class="text-link" href="index.php">Voltar</a>
+            <div class="header-actions">
+                <a class="button-secondary" href="download.php?id=<?= (int) $uploadId; ?>">Baixar arquivo enviado</a>
+                <?php if (in_array($upload['status'], ['failed', 'unsupported'], true)): ?>
+                    <form action="reprocess.php?id=<?= (int) $uploadId; ?>" method="post">
+                        <button type="submit" class="button-secondary">Reprocessar</button>
+                    </form>
+                <?php endif; ?>
+                <a class="text-link" href="index.php">Voltar</a>
+            </div>
         </div>
 
         <?php if ($flash !== null): ?>

@@ -74,7 +74,7 @@ final class CsvConverter extends AbstractConverter implements ConverterInterface
         }
 
         return [
-            'status' => $rows === [] ? 'processed_with_warning' : 'processed',
+            'status' => 'processed',
             'converter' => $this->getName(),
             'message' => $rows === [] ? 'CSV processado, mas sem linhas de dados.' : 'CSV importado com sucesso.',
             'warnings' => array_values(array_unique($warnings)),

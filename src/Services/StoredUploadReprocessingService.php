@@ -11,63 +11,53 @@ use App\Repositories\NormalizedDataRepository;
 use App\Repositories\ProcessingLogRepository;
 use App\Repositories\UploadedFileRepository;
 use App\Support\ReadabilityAnalyzer;
-use PDOException;
 use Throwable;
 
-final class UploadProcessingService
+final class StoredUploadReprocessingService
 {
     /** @var array<string,mixed> */
-    private $appConfig;
+    private array $appConfig;
 
     public function __construct(array $appConfig)
     {
         $this->appConfig = $appConfig;
     }
 
-    public function process(array $uploadedFile): array
+    public function reprocess(int $uploadId): array
     {
-        $uploadService = new FileUploadService($this->appConfig);
-        $storedFile = $uploadService->storeUploadedFile($uploadedFile);
-
-        return $this->processStoredFile($storedFile);
-    }
-
-    public function processStoredFile(array $storedFile): array
-    {
-        $detectionService = new FileDetectionService();
-        $conversionService = new FileConversionService();
         $uploadRepository = new UploadedFileRepository();
         $normalizedRepository = new NormalizedDataRepository();
         $logRepository = new ProcessingLogRepository();
         $conversionRunRepository = new ConversionRunRepository();
+        $upload = $uploadRepository->find($uploadId);
+
+        if ($upload === null) {
+            throw new ApplicationException('Arquivo nao encontrado para reprocessamento.');
+        }
+
+        $filePath = (string) ($upload['storage_path'] ?? '');
+        if ($filePath === '' || !is_file($filePath) || !is_readable($filePath)) {
+            return $this->archiveMissingSource($upload);
+        }
+
         $pdo = Connection::getInstance();
-        $uploadId = null;
 
         try {
             $pdo->beginTransaction();
 
-            $uploadId = $uploadRepository->create([
-                'original_filename' => $storedFile['original_filename'],
-                'sanitized_filename' => $storedFile['sanitized_filename'],
-                'stored_filename' => $storedFile['stored_filename'],
-                'storage_path' => $storedFile['storage_path'],
-                'extension' => $storedFile['extension'],
-                'file_size' => $storedFile['file_size'],
-                'checksum_sha256' => $storedFile['checksum_sha256'],
-                'status' => 'uploaded',
-            ]);
+            $logRepository->create($uploadId, 'reprocess', 'success', 'Reprocessamento iniciado pelo usuario.');
 
-            $logRepository->create($uploadId, 'upload', 'success', 'Arquivo enviado com sucesso.');
-
-            $detection = $detectionService->detect($storedFile['storage_path'], $storedFile['original_filename']);
+            $detection = (new FileDetectionService())->detect($filePath, (string) $upload['original_filename']);
             $uploadRepository->updateDetection($uploadId, $detection);
-            $logRepository->create($uploadId, 'detection', 'success', 'Tipo de arquivo identificado.', $detection);
+            $logRepository->create($uploadId, 'detection', 'success', 'Tipo de arquivo reidentificado.', $detection);
 
-            $conversionResult = $conversionService->convert($storedFile['storage_path'], $detection, $storedFile['original_filename']);
+            $conversionResult = (new FileConversionService())->convert($filePath, $detection, (string) $upload['original_filename']);
             $conversionResult = $this->attachReadabilityAnalysis($conversionResult);
 
             if ($conversionResult['normalized_data'] !== null) {
                 $normalizedRepository->replaceForUpload($uploadId, $conversionResult['normalized_data']);
+            } else {
+                $normalizedRepository->deleteForUpload($uploadId);
             }
 
             $uploadRepository->updateProcessingResult(
@@ -96,33 +86,36 @@ final class UploadProcessingService
                 [
                     'warnings' => $conversionResult['warnings'],
                     'converter' => $conversionResult['converter'],
+                    'reprocessed' => true,
                 ]
             );
 
             $pdo->commit();
 
             return [
-                'upload_id' => $uploadId,
                 'status' => $conversionResult['status'],
                 'message' => $conversionResult['message'],
             ];
-        } catch (PDOException $exception) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
-
-            $this->cleanupStoredFile($storedFile['storage_path'] ?? null);
-            $this->markUploadAsFailed($uploadId, 'Falha ao salvar informacoes no banco de dados: ' . $exception->getMessage());
-            throw new ApplicationException('Falha ao salvar informacoes no banco de dados.');
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
 
-            $this->markUploadAsFailed($uploadId, $exception->getMessage());
+            try {
+                $uploadRepository->updateProcessingResult(
+                    $uploadId,
+                    'failed',
+                    'System',
+                    $exception->getMessage(),
+                    ['reprocess_error' => true]
+                );
+                $logRepository->create($uploadId, 'reprocess', 'failed', $exception->getMessage());
+            } catch (Throwable) {
+            }
+
             throw $exception instanceof ApplicationException
                 ? $exception
-                : new ApplicationException('Falha ao processar o arquivo: ' . $exception->getMessage());
+                : new ApplicationException('Falha ao reprocessar o arquivo: ' . $exception->getMessage());
         }
     }
 
@@ -149,31 +142,40 @@ final class UploadProcessingService
         return $conversionResult;
     }
 
-    private function markUploadAsFailed(?int $uploadId, string $message): void
+    private function archiveMissingSource(array $upload): array
     {
-        if ($uploadId === null) {
-            return;
-        }
+        $uploadId = (int) $upload['id'];
+        $metadata = [
+            'original_filename' => (string) ($upload['original_filename'] ?? ''),
+            'extension' => (string) ($upload['extension'] ?? ''),
+            'mime_type' => (string) ($upload['mime_type'] ?? ''),
+            'detected_type' => (string) ($upload['detected_type'] ?? 'missing_source'),
+            'storage_path' => (string) ($upload['storage_path'] ?? ''),
+            'source_available' => false,
+            'previous_status' => (string) ($upload['status'] ?? ''),
+            'total_rows' => 3,
+            'total_columns' => 2,
+            'processed_at' => date('Y-m-d H:i:s'),
+        ];
 
-        try {
-            $uploadRepository = new UploadedFileRepository();
-            $logRepository = new ProcessingLogRepository();
+        $normalizedRepository = new NormalizedDataRepository();
+        $uploadRepository = new UploadedFileRepository();
+        $logRepository = new ProcessingLogRepository();
 
-            $uploadRepository->updateProcessingResult($uploadId, 'failed', 'System', $message, ['database_error' => true]);
-            $logRepository->create($uploadId, 'database', 'failed', $message);
-        } catch (Throwable) {
-        }
-    }
+        $normalizedRepository->deleteForUpload($uploadId);
+        $uploadRepository->archiveMissingSource($uploadId, $metadata);
 
-    private function cleanupStoredFile(?string $path): void
-    {
-        if ($path === null || $path === '' || !is_file($path)) {
-            return;
-        }
+        $logRepository->create(
+            $uploadId,
+            'archive',
+            'success',
+            'Registro arquivado porque o arquivo original nao esta mais disponivel.',
+            $metadata
+        );
 
-        try {
-            unlink($path);
-        } catch (Throwable) {
-        }
+        return [
+            'status' => 'archived_missing',
+            'message' => 'Registro arquivado porque o arquivo original esta ausente.',
+        ];
     }
 }

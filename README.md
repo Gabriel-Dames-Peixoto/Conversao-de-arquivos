@@ -14,7 +14,7 @@ O projeto foi criado para:
 - apontar areas com baixa confianca de leitura e solicitar preenchimento manual
 - exportar os dados normalizados novamente
 
-Arquivos sem conversor continuam sendo aceitos e registrados com status `unsupported`, sem derrubar o sistema.
+Arquivos sem conversor continuam sendo aceitos, diagnosticados e preservados com metadados, sem derrubar o sistema.
 
 ## Fluxo principal
 
@@ -157,7 +157,7 @@ Ja validado neste ambiente:
 
 - criacao do banco e das tabelas no MySQL
 - importacao de CSV, JSON, XML e TXT
-- fallback `unsupported` para extensao desconhecida
+- fallback com metadados para extensao desconhecida
 - processamento de PDF com aviso de OCR quando necessario
 - exportacao para CSV, JSON, XML e XLSX quando `ZipArchive` esta habilitado no PHP do Apache
 

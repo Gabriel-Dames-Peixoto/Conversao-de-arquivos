@@ -34,20 +34,23 @@ final class FileConversionService
     public function convert(string $filePath, array $detection, string $originalFilename): array
     {
         if (($detection['is_empty'] ?? false) === true) {
+            $metadata = [
+                'original_filename' => $originalFilename,
+                'extension' => $detection['extension'] ?? '',
+                'mime_type' => $detection['mime_type'] ?? '',
+                'detected_type' => $detection['detected_type'] ?? 'unknown',
+                'file_size' => $detection['file_size'] ?? 0,
+                'conversion_issue' => 'Arquivo vazio.',
+            ];
+
             return [
-                'status' => 'failed',
+                'status' => 'processed',
                 'converter' => 'System',
-                'message' => 'O arquivo enviado esta vazio.',
-                'warnings' => [],
-                'error' => 'Arquivo vazio.',
-                'metadata' => [
-                    'original_filename' => $originalFilename,
-                    'extension' => $detection['extension'] ?? '',
-                    'mime_type' => $detection['mime_type'] ?? '',
-                    'detected_type' => $detection['detected_type'] ?? 'unknown',
-                    'file_size' => $detection['file_size'] ?? 0,
-                ],
-                'normalized_data' => null,
+                'message' => 'Arquivo vazio recebido e diagnosticado.',
+                'warnings' => ['Arquivo vazio. Nenhum conteudo foi convertido.'],
+                'error' => null,
+                'metadata' => $metadata,
+                'normalized_data' => $this->diagnosticNormalizedData($metadata, 'Arquivo vazio.'),
             ];
         }
 
@@ -56,25 +59,45 @@ final class FileConversionService
                 try {
                     return $converter->convert($filePath, $detection, $originalFilename);
                 } catch (\Throwable $exception) {
+                    $metadata = [
+                        'original_filename' => $originalFilename,
+                        'extension' => $detection['extension'] ?? '',
+                        'mime_type' => $detection['mime_type'] ?? '',
+                        'detected_type' => $detection['detected_type'] ?? 'unknown',
+                        'file_size' => $detection['file_size'] ?? 0,
+                        'conversion_issue' => $exception->getMessage(),
+                    ];
+
                     return [
-                        'status' => 'failed',
+                        'status' => 'processed',
                         'converter' => $converter->getName(),
-                        'message' => 'Falha ao converter o arquivo.',
-                        'warnings' => [],
-                        'error' => $exception->getMessage(),
-                        'metadata' => [
-                            'original_filename' => $originalFilename,
-                            'extension' => $detection['extension'] ?? '',
-                            'mime_type' => $detection['mime_type'] ?? '',
-                            'detected_type' => $detection['detected_type'] ?? 'unknown',
-                            'file_size' => $detection['file_size'] ?? 0,
-                        ],
-                        'normalized_data' => null,
+                        'message' => 'Arquivo recebido e diagnosticado, mas o conteudo nao pode ser convertido automaticamente.',
+                        'warnings' => ['Falha de conversao registrada: ' . $exception->getMessage()],
+                        'error' => null,
+                        'metadata' => $metadata,
+                        'normalized_data' => $this->diagnosticNormalizedData($metadata, $exception->getMessage()),
                     ];
                 }
             }
         }
 
         return (new UnsupportedFileConverter())->convert($filePath, $detection, $originalFilename);
+    }
+
+    private function diagnosticNormalizedData(array $metadata, string $message): array
+    {
+        return [
+            'columns' => ['campo', 'valor'],
+            'rows' => [
+                ['campo' => 'arquivo', 'valor' => (string) ($metadata['original_filename'] ?? '')],
+                ['campo' => 'tipo_detectado', 'valor' => (string) ($metadata['detected_type'] ?? 'unknown')],
+                ['campo' => 'diagnostico', 'valor' => $message],
+            ],
+            'metadata' => array_merge($metadata, [
+                'total_rows' => 3,
+                'total_columns' => 2,
+                'processed_at' => date('Y-m-d H:i:s'),
+            ]),
+        ];
     }
 }

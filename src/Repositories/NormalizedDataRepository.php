@@ -8,10 +8,17 @@ use App\Database\Connection;
 
 final class NormalizedDataRepository
 {
+    public function deleteForUpload(int $uploadId): void
+    {
+        Connection::getInstance()
+            ->prepare('DELETE FROM normalized_data WHERE upload_id = :upload_id')
+            ->execute(['upload_id' => $uploadId]);
+    }
+
     public function replaceForUpload(int $uploadId, array $normalizedData): int
     {
         $pdo = Connection::getInstance();
-        $pdo->prepare('DELETE FROM normalized_data WHERE upload_id = :upload_id')->execute(['upload_id' => $uploadId]);
+        $this->deleteForUpload($uploadId);
 
         $statement = $pdo->prepare(
             'INSERT INTO normalized_data (

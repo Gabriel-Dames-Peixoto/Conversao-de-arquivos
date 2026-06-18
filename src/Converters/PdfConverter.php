@@ -31,26 +31,33 @@ final class PdfConverter extends AbstractConverter implements ConverterInterface
         $extractor = new PdfTextExtractor();
         $extraction = $extractor->extract($filePath);
         $warnings = $extraction['warnings'];
+        $extractionMethod = (string) ($extraction['method'] ?? 'unknown');
 
         if (trim($extraction['text']) === '') {
             $warnings[] = 'Nao foi encontrado texto extraivel no PDF. OCR seria necessario para PDFs escaneados.';
 
             return [
-                'status' => 'processed_with_warning',
+                'status' => 'processed',
                 'converter' => $this->getName(),
-                'message' => 'PDF aceito e registrado, mas sem texto extraivel.',
+                'message' => 'PDF aceito e registrado para revisao manual porque nao possui texto extraivel.',
                 'warnings' => $warnings,
                 'error' => null,
                 'metadata' => array_merge(
                     $this->baseMetadata($detection, $originalFilename),
-                    ['ocr_required' => true]
+                    [
+                        'ocr_required' => true,
+                        'extraction_method' => $extractionMethod,
+                    ]
                 ),
                 'normalized_data' => $this->buildNormalizedData(
                     ['text'],
                     [],
                     array_merge(
                         $this->baseMetadata($detection, $originalFilename),
-                        ['ocr_required' => true]
+                        [
+                            'ocr_required' => true,
+                            'extraction_method' => $extractionMethod,
+                        ]
                     )
                 ),
             ];
@@ -65,7 +72,10 @@ final class PdfConverter extends AbstractConverter implements ConverterInterface
                 $tableRows,
                 array_merge(
                     $this->baseMetadata($detection, $originalFilename),
-                    ['table_extraction' => true]
+                    [
+                        'table_extraction' => true,
+                        'extraction_method' => $extractionMethod,
+                    ]
                 )
             );
         } else {
@@ -75,15 +85,20 @@ final class PdfConverter extends AbstractConverter implements ConverterInterface
                 array_map(static fn (string $line): array => ['text' => $line], $lines),
                 array_merge(
                     $this->baseMetadata($detection, $originalFilename),
-                    ['table_extraction' => false]
+                    [
+                        'table_extraction' => false,
+                        'extraction_method' => $extractionMethod,
+                    ]
                 )
             );
         }
 
         return [
-            'status' => 'processed_with_warning',
+            'status' => 'processed',
             'converter' => $this->getName(),
-            'message' => 'PDF processado com tentativa de extracao de texto.',
+            'message' => $warnings === []
+                ? 'PDF importado com texto extraido com sucesso.'
+                : 'PDF importado com texto extraido e avisos registrados.',
             'warnings' => $warnings,
             'error' => null,
             'metadata' => array_merge(
@@ -91,6 +106,7 @@ final class PdfConverter extends AbstractConverter implements ConverterInterface
                 [
                     'table_extraction' => $tableRows !== [],
                     'ocr_required' => false,
+                    'extraction_method' => $extractionMethod,
                 ]
             ),
             'normalized_data' => $normalizedData,

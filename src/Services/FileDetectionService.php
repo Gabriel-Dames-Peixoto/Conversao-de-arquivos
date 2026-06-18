@@ -72,6 +72,14 @@ final class FileDetectionService
             return 'json';
         }
 
+        if ($extension === 'xlsx' || ($signature === 'zip' && str_contains($mimeType, 'officedocument'))) {
+            return 'xlsx';
+        }
+
+        if ($extension === 'xls' || $signature === 'ole') {
+            return 'xls';
+        }
+
         if (in_array($extension, ['xml'], true) || str_contains($mimeType, 'xml')) {
             return 'xml';
         }
@@ -82,14 +90,6 @@ final class FileDetectionService
 
         if (in_array($extension, ['txt', 'log'], true) || str_starts_with($mimeType, 'text/')) {
             return 'txt';
-        }
-
-        if ($extension === 'xlsx' || ($signature === 'zip' && str_contains($mimeType, 'officedocument'))) {
-            return 'xlsx';
-        }
-
-        if ($extension === 'xls' || $signature === 'ole') {
-            return 'xls';
         }
 
         return 'unsupported';

@@ -142,6 +142,91 @@ button {
     cursor: not-allowed;
 }
 
+.tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.tab-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 10px 16px;
+    background: var(--panel-strong);
+    color: var(--muted);
+    font-weight: 800;
+    text-decoration: none;
+}
+
+.tab-link span {
+    display: inline-flex;
+    min-width: 28px;
+    justify-content: center;
+    border-radius: 999px;
+    padding: 3px 8px;
+    background: #efe5d7;
+    color: var(--text);
+    font-size: 0.82rem;
+}
+
+.tab-link.is-active {
+    border-color: rgba(11, 110, 79, 0.28);
+    background: var(--brand-soft);
+    color: var(--brand);
+}
+
+.filter-form {
+    display: grid;
+    gap: 16px;
+    margin-bottom: 20px;
+    padding: 18px;
+    border: 1px solid rgba(216, 203, 187, 0.8);
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.45);
+}
+
+.filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 14px;
+}
+
+.filter-field {
+    display: grid;
+    gap: 8px;
+    color: var(--text);
+    font-weight: 700;
+}
+
+.filter-field-wide {
+    grid-column: span 2;
+}
+
+.filter-field span {
+    font-size: 0.9rem;
+}
+
+.filter-field input,
+.filter-field select {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--panel-strong);
+    color: var(--text);
+    font: inherit;
+    padding: 11px 12px;
+}
+
+.filter-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
 .panel-header {
     display: flex;
     justify-content: space-between;
@@ -197,6 +282,11 @@ th {
     color: var(--warning);
 }
 
+.badge-archived_missing {
+    background: #ece7df;
+    color: var(--muted);
+}
+
 .badge-failed,
 .badge-error {
     background: var(--danger-soft);
@@ -231,6 +321,12 @@ th {
     color: var(--brand);
     text-decoration: none;
     font-weight: 700;
+}
+
+.text-muted {
+    color: var(--muted);
+    font-size: 0.9rem;
+    font-weight: 600;
 }
 
 .error-block {
@@ -275,6 +371,23 @@ th {
     flex-wrap: wrap;
     gap: 12px;
     margin-bottom: 20px;
+}
+
+.header-actions,
+.row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.header-actions form {
+    margin: 0;
+}
+
+.row-actions {
+    justify-content: flex-start;
 }
 
 .review-panel {
@@ -389,5 +502,9 @@ code {
 
     .review-summary {
         grid-template-columns: 1fr;
+    }
+
+    .filter-field-wide {
+        grid-column: span 1;
     }
 }

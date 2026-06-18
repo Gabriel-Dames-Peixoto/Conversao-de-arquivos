@@ -104,7 +104,7 @@ final class ManualReviewService
             'metadata' => $metadata,
         ]);
 
-        $newUploadStatus = $status === 'reviewed' ? 'reviewed' : 'processed_with_warning';
+        $newUploadStatus = 'processed';
         (new UploadedFileRepository())->updateProcessingResult(
             $uploadId,
             $newUploadStatus,
