@@ -51,7 +51,12 @@ final class StoredUploadReprocessingService
             $uploadRepository->updateDetection($uploadId, $detection);
             $logRepository->create($uploadId, 'detection', 'success', 'Tipo de arquivo reidentificado.', $detection);
 
+            $importContextService = new ImportContextService();
             $conversionResult = (new FileConversionService())->convert($filePath, $detection, (string) $upload['original_filename']);
+            $conversionResult = $importContextService->applyToConversionResult(
+                $conversionResult,
+                $importContextService->fromUpload($upload)
+            );
             $conversionResult = $this->attachReadabilityAnalysis($conversionResult);
 
             if ($conversionResult['normalized_data'] !== null) {
@@ -132,7 +137,7 @@ final class StoredUploadReprocessingService
         $conversionResult['metadata']['manual_review'] = $manualReview;
 
         if (($manualReview['required'] ?? false) === true) {
-            $conversionResult['warnings'][] = 'Existem campos com baixa confianca de leitura. Revise e preencha manualmente as areas indicadas.';
+            $conversionResult['warnings'][] = 'Existem campos pendentes de revisao. Revise e preencha manualmente os campos indicados.';
 
             $conversionResult['message'] .= ' Revise os campos indicados antes da exportacao final.';
         }

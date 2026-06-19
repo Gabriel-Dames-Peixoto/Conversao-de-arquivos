@@ -24,15 +24,15 @@ final class UploadProcessingService
         $this->appConfig = $appConfig;
     }
 
-    public function process(array $uploadedFile): array
+    public function process(array $uploadedFile, array $importContext = []): array
     {
         $uploadService = new FileUploadService($this->appConfig);
         $storedFile = $uploadService->storeUploadedFile($uploadedFile);
 
-        return $this->processStoredFile($storedFile);
+        return $this->processStoredFile($storedFile, $importContext);
     }
 
-    public function processStoredFile(array $storedFile): array
+    public function processStoredFile(array $storedFile, array $importContext = []): array
     {
         $detectionService = new FileDetectionService();
         $conversionService = new FileConversionService();
@@ -64,6 +64,7 @@ final class UploadProcessingService
             $logRepository->create($uploadId, 'detection', 'success', 'Tipo de arquivo identificado.', $detection);
 
             $conversionResult = $conversionService->convert($storedFile['storage_path'], $detection, $storedFile['original_filename']);
+            $conversionResult = (new ImportContextService())->applyToConversionResult($conversionResult, $importContext);
             $conversionResult = $this->attachReadabilityAnalysis($conversionResult);
 
             if ($conversionResult['normalized_data'] !== null) {
@@ -139,7 +140,7 @@ final class UploadProcessingService
         $conversionResult['metadata']['manual_review'] = $manualReview;
 
         if (($manualReview['required'] ?? false) === true) {
-            $conversionResult['warnings'][] = 'Existem campos com baixa confianca de leitura. Revise e preencha manualmente as areas indicadas.';
+            $conversionResult['warnings'][] = 'Existem campos pendentes de revisao. Revise e preencha manualmente os campos indicados.';
 
             $conversionResult['message'] .= ' Revise os campos indicados antes da exportacao final.';
         }

@@ -29,12 +29,17 @@ final class ReadabilityAnalyzer
         $issues = [];
         $fields = [];
         $warningHits = $this->countReadingWarnings($warnings);
+        $detectedType = (string) ($metadata['detected_type'] ?? '');
         $ocrRequired = ($metadata['ocr_required'] ?? false) === true;
+        $ocrLowConfidence = ($metadata['ocr_low_confidence'] ?? false) === true
+            || (is_numeric($metadata['ocr_confidence'] ?? null) && (float) $metadata['ocr_confidence'] < OcrTextExtractor::LOW_CONFIDENCE_THRESHOLD);
+        $scanLikeWithoutRows = $rows === [] && in_array($detectedType, ['pdf', 'image'], true);
+        $documentReviewRequired = $ocrRequired || $ocrLowConfidence || $scanLikeWithoutRows;
 
-        if ($ocrRequired || ($rows === [] && ($metadata['detected_type'] ?? '') === 'pdf')) {
+        if ($documentReviewRequired) {
             $issues[] = [
                 'area' => 'Documento inteiro',
-                'reason' => 'O arquivo parece escaneado ou sem texto extraivel automaticamente.',
+                'reason' => $this->documentReviewReason($ocrRequired, $ocrLowConfidence, $detectedType),
                 'severity' => 'high',
             ];
 
@@ -42,7 +47,7 @@ final class ReadabilityAnalyzer
                 $fields[] = [
                     'key' => (string) ($field['key'] ?? $this->makeKey((string) ($field['label'] ?? 'campo'))),
                     'label' => (string) ($field['label'] ?? 'Campo manual'),
-                    'reason' => 'Preenchimento manual solicitado porque o texto nao foi extraido com confianca.',
+                    'reason' => $this->documentFieldReason($ocrRequired, $ocrLowConfidence),
                     'current_value' => '',
                     'manual_value' => '',
                     'type' => 'document_field',
@@ -94,7 +99,7 @@ final class ReadabilityAnalyzer
         $totalCells = max(1, count($rows) * max(1, count($columns)));
         $cellPenalty = min(0.55, count($fields) / $totalCells);
         $warningPenalty = min(0.25, $warningHits * 0.08);
-        $ocrPenalty = $ocrRequired ? 0.7 : 0.0;
+        $ocrPenalty = $ocrRequired || $scanLikeWithoutRows ? 0.7 : ($ocrLowConfidence ? 0.35 : 0.0);
         $confidence = max(0.05, round(1 - $cellPenalty - $warningPenalty - $ocrPenalty, 2));
         $required = $issues !== [] || $confidence < 0.72;
 
@@ -116,7 +121,7 @@ final class ReadabilityAnalyzer
             'status' => $required ? 'pending' : 'not_required',
             'confidence' => $confidence,
             'summary' => $required
-                ? 'Foram encontradas areas com baixa confianca de leitura. Revise os campos indicados antes da exportacao final.'
+                ? 'Foram encontrados campos pendentes de revisao. Preencha ou confirme os campos indicados antes da exportacao final.'
                 : 'Leitura concluida sem areas criticas para revisao manual.',
             'issues' => array_slice($issues, 0, 40),
             'fields' => $fields,
@@ -146,6 +151,34 @@ final class ReadabilityAnalyzer
         }
 
         return null;
+    }
+
+    private function documentReviewReason(bool $ocrRequired, bool $ocrLowConfidence, string $detectedType): string
+    {
+        if ($ocrRequired) {
+            return $detectedType === 'image'
+                ? 'A imagem parece escaneada e nao teve texto extraido automaticamente.'
+                : 'O arquivo parece escaneado ou sem texto extraivel automaticamente.';
+        }
+
+        if ($ocrLowConfidence) {
+            return 'O OCR foi executado, mas a confianca estimada ficou baixa.';
+        }
+
+        return 'O documento nao gerou linhas legiveis automaticamente.';
+    }
+
+    private function documentFieldReason(bool $ocrRequired, bool $ocrLowConfidence): string
+    {
+        if ($ocrRequired) {
+            return 'Preenchimento manual solicitado porque o texto nao foi extraido com confianca.';
+        }
+
+        if ($ocrLowConfidence) {
+            return 'Confirme ou substitua manualmente porque o OCR ficou com baixa confianca.';
+        }
+
+        return 'Preenchimento manual solicitado porque a leitura automatica nao gerou dados confiaveis.';
     }
 
     private function isImportantColumn(string $column): bool

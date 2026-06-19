@@ -55,6 +55,17 @@ final class FileDetectionService
             return 'ole';
         }
 
+        if (
+            strpos($hex, '89504E470D0A1A0A') === 0
+            || strpos($hex, 'FFD8FF') === 0
+            || strpos($hex, '47494638') === 0
+            || strpos($hex, '49492A00') === 0
+            || strpos($hex, '4D4D002A') === 0
+            || strpos($hex, '424D') === 0
+        ) {
+            return 'image';
+        }
+
         return 'unknown';
     }
 
@@ -62,6 +73,14 @@ final class FileDetectionService
     {
         if ($signature === 'pdf' || $extension === 'pdf') {
             return 'pdf';
+        }
+
+        if (
+            $signature === 'image'
+            || in_array($extension, ['png', 'jpg', 'jpeg', 'tif', 'tiff', 'bmp', 'gif', 'webp'], true)
+            || str_starts_with($mimeType, 'image/')
+        ) {
+            return 'image';
         }
 
         if (in_array($extension, ['csv'], true) || str_contains($mimeType, 'csv')) {

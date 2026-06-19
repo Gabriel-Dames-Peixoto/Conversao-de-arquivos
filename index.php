@@ -5,6 +5,7 @@ declare(strict_types=1);
 $bootstrap = require __DIR__ . '/bootstrap.php';
 
 use App\Repositories\UploadedFileRepository;
+use App\Services\ImportContextService;
 use App\Services\UploadProcessingService;
 
 function index_request_value(string $key): string
@@ -121,7 +122,8 @@ if ($databaseError === null) {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['upload_file'])) {
         try {
             $processingService = new UploadProcessingService($appConfig);
-            $result = $processingService->process($_FILES['upload_file']);
+            $importContext = (new ImportContextService())->fromRequest($_POST);
+            $result = $processingService->process($_FILES['upload_file'], $importContext);
 
             $_SESSION['flash'] = [
                 'type' => $result['status'] === 'failed' ? 'error' : 'success',
@@ -173,7 +175,7 @@ if ($databaseError === null) {
         <div class="status-grid">
             <div class="status-box">
                 <strong>Formatos priorizados</strong>
-                <span>CSV, TXT, JSON, XML, XLS, XLSX e PDF</span>
+                <span>CSV, TXT, JSON, XML, XLS, XLSX, PDF e imagens escaneadas</span>
             </div>
             <div class="status-box">
                 <strong>Fallback seguro</strong>
@@ -205,9 +207,25 @@ if ($databaseError === null) {
                     <span>Selecione o arquivo</span>
                     <input type="file" name="upload_file" required>
                 </label>
+
+                <div class="import-context-grid">
+                    <label class="filter-field">
+                        <span>Processo de importacao</span>
+                        <select name="process_type">
+                            <option value="">Geral / automatico</option>
+                            <option value="prefeitura_rio">Prefeitura do Rio</option>
+                        </select>
+                    </label>
+
+                    <label class="filter-field">
+                        <span>CRE / pasta</span>
+                        <input type="text" name="cre_folder" placeholder="Opcional, ex.: CRE 01">
+                    </label>
+                </div>
+
                 <p class="helper-text">
                     Tamanho maximo: <?= number_format(($appConfig['max_upload_size'] / 1024 / 1024), 0, ',', '.'); ?> MB.
-                    O sistema usa deteccao por MIME, extensao e assinatura para escolher o conversor.
+                    Para arquivos da Prefeitura do Rio, selecione o processo e informe a CRE/pasta apenas se quiser incluir essa referencia na exportacao.
                 </p>
                 <button type="submit">Enviar e processar</button>
             </form>

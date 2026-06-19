@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Converters;
 
 use App\Contracts\ConverterInterface;
+use App\Support\FixedWidthScheduleExtractor;
 
 final class TxtConverter extends AbstractConverter implements ConverterInterface
 {
@@ -28,6 +29,11 @@ final class TxtConverter extends AbstractConverter implements ConverterInterface
 
         if ($lines === []) {
             throw new \RuntimeException('O arquivo TXT esta vazio.');
+        }
+
+        $structured = $this->tryFixedWidthSchedule($lines, $detection, $originalFilename);
+        if ($structured !== null) {
+            return $structured;
         }
 
         $detectedDelimiter = $this->detectDelimiter($lines);
@@ -111,5 +117,29 @@ final class TxtConverter extends AbstractConverter implements ConverterInterface
         }
 
         return null;
+    }
+
+    private function tryFixedWidthSchedule(array $lines, array $detection, string $originalFilename): ?array
+    {
+        $baseMetadata = $this->baseMetadata($detection, $originalFilename);
+        $structured = (new FixedWidthScheduleExtractor())->extract($lines, $baseMetadata);
+
+        if ($structured === null) {
+            return null;
+        }
+
+        return [
+            'status' => 'processed',
+            'converter' => 'FixedWidthScheduleConverter',
+            'message' => 'Arquivo de largura fixa identificado e organizado por produto e data.',
+            'warnings' => $structured['warnings'],
+            'error' => null,
+            'metadata' => $structured['metadata'],
+            'normalized_data' => $this->buildNormalizedData(
+                $structured['columns'],
+                $structured['rows'],
+                $structured['metadata']
+            ),
+        ];
     }
 }

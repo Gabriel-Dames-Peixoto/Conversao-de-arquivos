@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Converters;
 
 use App\Contracts\ConverterInterface;
+use App\Support\FixedWidthScheduleExtractor;
 use RuntimeException;
 
 final class CsvConverter extends AbstractConverter implements ConverterInterface
@@ -41,6 +42,13 @@ final class CsvConverter extends AbstractConverter implements ConverterInterface
         if ($sampleLines === []) {
             fclose($handle);
             throw new RuntimeException('O arquivo CSV esta vazio.');
+        }
+
+        $structured = $this->tryFixedWidthSchedule($filePath, $detection, $originalFilename);
+        if ($structured !== null) {
+            fclose($handle);
+
+            return $structured;
         }
 
         $delimiter = $this->detectDelimiter($sampleLines);
@@ -119,5 +127,36 @@ final class CsvConverter extends AbstractConverter implements ConverterInterface
         }
 
         return $normalized === [] ? ['column_1'] : $normalized;
+    }
+
+    private function tryFixedWidthSchedule(string $filePath, array $detection, string $originalFilename): ?array
+    {
+        $content = file_get_contents($filePath);
+        if ($content === false) {
+            return null;
+        }
+
+        $lines = preg_split('/\R/u', $content) ?: [];
+        $lines = array_values(array_filter(array_map('trim', $lines), static fn (string $line): bool => $line !== ''));
+        $baseMetadata = $this->baseMetadata($detection, $originalFilename);
+        $structured = (new FixedWidthScheduleExtractor())->extract($lines, $baseMetadata);
+
+        if ($structured === null) {
+            return null;
+        }
+
+        return [
+            'status' => 'processed',
+            'converter' => 'FixedWidthScheduleConverter',
+            'message' => 'Arquivo de largura fixa identificado e organizado por produto e data.',
+            'warnings' => $structured['warnings'],
+            'error' => null,
+            'metadata' => $structured['metadata'],
+            'normalized_data' => $this->buildNormalizedData(
+                $structured['columns'],
+                $structured['rows'],
+                $structured['metadata']
+            ),
+        ];
     }
 }

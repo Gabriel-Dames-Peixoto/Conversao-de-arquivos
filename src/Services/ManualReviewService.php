@@ -34,6 +34,7 @@ final class ManualReviewService
             ? array_values(array_filter($review['fields'], 'is_array'))
             : [];
         $manualDocumentRows = [];
+        $contextUpdates = [];
 
         foreach ($fields as $index => $field) {
             if (!is_array($field)) {
@@ -65,10 +66,39 @@ final class ManualReviewService
                 ];
             }
 
+            if ($manualValue !== '' && ($field['type'] ?? '') === 'import_context') {
+                $target = (string) ($field['target'] ?? $key);
+                if ($target !== '') {
+                    $contextUpdates[$target] = $manualValue;
+                    $field['current_value'] = $manualValue;
+                }
+            }
+
             $fields[$index] = $field;
         }
 
-        if ($manualDocumentRows !== [] && ($rows === [] || ($metadata['ocr_required'] ?? false) === true)) {
+        foreach ($contextUpdates as $target => $manualValue) {
+            $normalizedWithContext = (new ImportContextService())->applyManualValue(
+                [
+                    'columns' => $columns,
+                    'rows' => $rows,
+                    'metadata' => $metadata,
+                ],
+                (string) $target,
+                (string) $manualValue
+            );
+
+            $columns = $normalizedWithContext['columns'];
+            $rows = $normalizedWithContext['rows'];
+            $metadata = $normalizedWithContext['metadata'];
+        }
+
+        $isOcrDocument = ($metadata['ocr_required'] ?? false) === true
+            || ($metadata['ocr_low_confidence'] ?? false) === true
+            || ($metadata['ocr_performed'] ?? false) === true
+            || in_array((string) ($metadata['detected_type'] ?? ''), ['pdf', 'image'], true);
+
+        if ($manualDocumentRows !== [] && ($rows === [] || $isOcrDocument)) {
             $columns = ['campo', 'valor', 'origem'];
             $rows = $manualDocumentRows;
         }

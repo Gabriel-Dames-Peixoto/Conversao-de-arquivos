@@ -80,11 +80,12 @@ Convertidos para o padrao interno:
 - JSON
 - XML
 - PDF com tentativa de extracao de texto e heuristica simples para tabelas
+- imagens escaneadas com tentativa de OCR quando Tesseract estiver disponivel
 
 Aceitos e registrados, mas com conversao parcial ou dependente do ambiente:
 
 - XLSX: importacao e exportacao dependem da extensao `zip` do PHP
-- PDF escaneado: e aceito, marcado para revisao manual quando nao houver texto extraivel e preparado para receber dados preenchidos pelo usuario
+- PDF escaneado: o sistema renderiza paginas com Poppler/pdftoppm, tenta OCR com Tesseract e exige revisao manual quando nao houver texto ou a confianca for baixa
 
 Aceitos, registrados e ainda nao convertidos:
 
@@ -101,6 +102,7 @@ O sistema trata explicitamente:
 - XML invalido
 - CSV com separadores diferentes
 - PDF sem texto extraivel
+- imagem escaneada sem OCR disponivel ou com baixa confianca
 - areas com baixa confianca de leitura em arquivos enviados ou escaneados
 - extensao desconhecida
 - erro ao salvar no banco
@@ -124,6 +126,23 @@ Comportamento esperado:
 - `src/Repositories`: persistencia no MySQL
 - `database/schema.sql`: schema do banco
 - `storage/`: uploads, exportacoes e sessoes
+
+## OCR para imagens e PDFs escaneados
+
+O OCR e opcional no ambiente, mas o fluxo ja esta preparado:
+
+- `pdftotext`: usado primeiro para PDFs com texto selecionavel
+- `pdftoppm`: renderiza paginas de PDF escaneado em PNG para OCR
+- `tesseract`: le imagens e paginas renderizadas quando instalado
+
+Variaveis opcionais:
+
+- `PDFTOTEXT_PATH`: caminho completo do `pdftotext`
+- `PDFTOPPM_PATH`: caminho completo do `pdftoppm`
+- `TESSERACT_PATH`: caminho completo do `tesseract`
+- `OCR_LANG`: idioma do OCR, por exemplo `por+eng`
+
+Se o Tesseract nao estiver disponivel, o upload continua sendo aceito, mas o sistema marca a leitura como pendente e solicita preenchimento manual antes da exportacao final.
 
 ## Como adicionar um novo conversor
 
@@ -159,13 +178,17 @@ Ja validado neste ambiente:
 - importacao de CSV, JSON, XML e TXT
 - fallback com metadados para extensao desconhecida
 - processamento de PDF com aviso de OCR quando necessario
+- deteccao de imagens escaneadas e criacao de revisao manual quando OCR nao esta disponivel ou nao encontra texto
 - exportacao para CSV, JSON, XML e XLSX quando `ZipArchive` esta habilitado no PHP do Apache
 
 Implementado no fluxo atual:
 
 - revisao manual para areas de baixa confianca, incluindo PDF escaneado sem texto extraivel
+- bloqueio de exportacao final enquanto a revisao manual obrigatoria estiver pendente
+- script `tools/validate_ocr_flow.php` para validar imagem escaneada e PDF sem texto
 
 Limitacoes atuais:
 
 - importacao e exportacao XLSX ficam indisponiveis em ambientes PHP sem a extensao `zip`/`ZipArchive`
 - conversao completa de XLS ainda nao foi implementada
+- OCR real depende do Tesseract instalado e dos pacotes de idioma configurados no servidor

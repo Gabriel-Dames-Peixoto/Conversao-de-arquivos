@@ -21,6 +21,8 @@ final class ExportProcessingService
 
     public function process(array $upload, array $normalized, string $format): array
     {
+        $this->ensureManualReviewCompleted($normalized);
+
         $exportRepository = new ExportedFileRepository();
 
         try {
@@ -52,5 +54,21 @@ final class ExportProcessingService
                 ? $exception
                 : new ApplicationException('Erro ao exportar o arquivo: ' . $exception->getMessage());
         }
+    }
+
+    private function ensureManualReviewCompleted(array $normalized): void
+    {
+        $metadata = is_array($normalized['metadata'] ?? null) ? $normalized['metadata'] : [];
+        $review = is_array($metadata['manual_review'] ?? null) ? $metadata['manual_review'] : null;
+
+        if ($review === null || ($review['required'] ?? false) !== true) {
+            return;
+        }
+
+        if (($review['status'] ?? '') === 'reviewed') {
+            return;
+        }
+
+        throw new ApplicationException('Conclua a revisao manual dos campos pendentes antes de exportar o arquivo final.');
     }
 }

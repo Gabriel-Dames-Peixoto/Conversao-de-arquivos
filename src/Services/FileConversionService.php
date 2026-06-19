@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Contracts\ConverterInterface;
 use App\Converters\CsvConverter;
 use App\Converters\ExcelConverter;
+use App\Converters\ImageConverter;
 use App\Converters\JsonConverter;
 use App\Converters\PdfConverter;
 use App\Converters\TxtConverter;
@@ -26,6 +27,7 @@ final class FileConversionService
             new JsonConverter(),
             new XmlConverter(),
             new ExcelConverter(),
+            new ImageConverter(),
             new PdfConverter(),
             new UnsupportedFileConverter(),
         ];

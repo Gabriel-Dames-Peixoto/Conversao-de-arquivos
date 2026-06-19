@@ -12,6 +12,42 @@ use App\Repositories\UploadedFileRepository;
 use App\Services\ExportService;
 use App\Services\ManualReviewService;
 
+function detail_column_label(string $column, array $labels): string
+{
+    $label = $labels[$column] ?? $column;
+
+    return (string) $label;
+}
+
+function detail_preview_url(int $uploadId, string $filter, int $limit, int $page): string
+{
+    return 'file.php?' . http_build_query([
+        'id' => $uploadId,
+        'preview_filter' => $filter,
+        'preview_limit' => $limit,
+        'preview_page' => $page,
+    ]);
+}
+
+function detail_column_class(string $column, array $quantityColumns): string
+{
+    $classes = [];
+
+    if (isset($quantityColumns[$column])) {
+        $classes[] = 'is-quantity-column';
+    }
+
+    if (in_array($column, ['fornecedor_nome', 'produto_nome', 'unidade_nome'], true)) {
+        $classes[] = 'is-wide-text-column';
+    }
+
+    if (in_array($column, ['fornecedor_codigo', 'pedido', 'pedido_item', 'grupo', 'unidade_codigo', 'documento', 'produto_codigo', 'controle'], true)) {
+        $classes[] = 'is-code-column';
+    }
+
+    return implode(' ', $classes);
+}
+
 $databaseError = $bootstrap['database_error'];
 
 if ($databaseError !== null) {
@@ -72,20 +108,86 @@ unset($_SESSION['flash']);
 $previewRows = $bootstrap['app_config']['preview_rows'];
 $rows = $normalized['rows'] ?? [];
 $columns = $normalized['columns'] ?? [];
+$metadata = is_array($normalized['metadata'] ?? null) ? $normalized['metadata'] : [];
+$columnLabels = is_array($metadata['column_labels'] ?? null) ? $metadata['column_labels'] : [];
+$presentation = is_array($metadata['presentation'] ?? null) ? $metadata['presentation'] : null;
+$presentationSummary = is_array($presentation['summary'] ?? null) ? $presentation['summary'] : [];
+$presentationTitle = (string) ($presentation['title'] ?? 'Dados identificados');
+$quantityColumns = [];
+
+foreach (is_array($presentation['quantity_columns'] ?? null) ? $presentation['quantity_columns'] : [] as $quantityColumn) {
+    if (is_array($quantityColumn) && isset($quantityColumn['column'])) {
+        $quantityColumns[(string) $quantityColumn['column']] = true;
+    }
+}
+
 $manualReview = is_array($normalized['metadata']['manual_review'] ?? null) ? $normalized['metadata']['manual_review'] : null;
+$manualReviewPending = $manualReview !== null
+    && ($manualReview['required'] ?? false) === true
+    && ($manualReview['status'] ?? '') !== 'reviewed';
 $reviewFields = is_array($manualReview['fields'] ?? null) ? $manualReview['fields'] : [];
 $reviewIssues = is_array($manualReview['issues'] ?? null) ? $manualReview['issues'] : [];
 $reviewCellMap = [];
+$reviewRowMap = [];
 
 foreach ($reviewFields as $field) {
     if (!is_array($field) || ($field['type'] ?? '') !== 'cell') {
         continue;
     }
 
-    $reviewCellMap[((int) ($field['row_index'] ?? -1)) . '|' . (string) ($field['column'] ?? '')] = true;
+    $reviewRowIndex = (int) ($field['row_index'] ?? -1);
+    if ($reviewRowIndex < 0) {
+        continue;
+    }
+
+    $reviewCellMap[$reviewRowIndex . '|' . (string) ($field['column'] ?? '')] = true;
+    $reviewRowMap[$reviewRowIndex] = true;
 }
 
 $reviewConfidence = $manualReview !== null ? (int) round(((float) ($manualReview['confidence'] ?? 0)) * 100) : null;
+$previewFilter = (string) ($_GET['preview_filter'] ?? 'all');
+if (!in_array($previewFilter, ['all', 'review'], true)) {
+    $previewFilter = 'all';
+}
+
+$previewLimitOptions = [25, 50, 100, 200];
+$requestedPreviewLimit = isset($_GET['preview_limit']) ? (int) $_GET['preview_limit'] : (int) $previewRows;
+$previewLimit = in_array($requestedPreviewLimit, $previewLimitOptions, true)
+    ? $requestedPreviewLimit
+    : (in_array((int) $previewRows, $previewLimitOptions, true) ? (int) $previewRows : 50);
+$previewPage = max(1, isset($_GET['preview_page']) ? (int) $_GET['preview_page'] : 1);
+$filteredRows = [];
+
+foreach (is_array($rows) ? $rows : [] as $rowIndex => $row) {
+    if ($previewFilter === 'review' && !isset($reviewRowMap[(int) $rowIndex])) {
+        continue;
+    }
+
+    $filteredRows[$rowIndex] = $row;
+}
+
+$filteredRowCount = count($filteredRows);
+$previewTotalPages = max(1, (int) ceil($filteredRowCount / max(1, $previewLimit)));
+$previewPage = min($previewPage, $previewTotalPages);
+$previewOffset = ($previewPage - 1) * $previewLimit;
+$previewPageRows = array_slice($filteredRows, $previewOffset, $previewLimit, true);
+$previewShowingStart = $filteredRowCount === 0 ? 0 : $previewOffset + 1;
+$previewShowingEnd = $filteredRowCount === 0 ? 0 : min($filteredRowCount, $previewOffset + count($previewPageRows));
+$reviewCellCount = count($reviewCellMap);
+$reviewRowCount = count($reviewRowMap);
+$paginationPages = [];
+if ($previewTotalPages <= 7) {
+    $paginationPages = range(1, $previewTotalPages);
+} else {
+    $paginationPages = array_values(array_unique(array_filter([
+        1,
+        $previewPage - 1,
+        $previewPage,
+        $previewPage + 1,
+        $previewTotalPages,
+    ], static fn (int $page): bool => $page >= 1 && $page <= $previewTotalPages)));
+    sort($paginationPages);
+}
 $exportFormats = [
     'csv' => ['label' => 'Exportar CSV', 'available' => ExportService::isFormatAvailable('csv')],
     'json' => ['label' => 'Exportar JSON', 'available' => ExportService::isFormatAvailable('json')],
@@ -102,7 +204,7 @@ $exportFormats = [
     <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body>
-<main class="page-shell">
+<main class="page-shell detail-shell">
     <section class="panel">
         <div class="panel-header">
             <div>
@@ -155,7 +257,7 @@ $exportFormats = [
             <div class="panel-header">
                 <div>
                     <p class="eyebrow">Revisao manual</p>
-                    <h2>Areas com baixa confianca de leitura</h2>
+                    <h2>Campos pendentes de revisao</h2>
                 </div>
                 <span class="badge badge-<?= ($manualReview['status'] ?? '') === 'reviewed' ? 'reviewed' : 'warning'; ?>">
                     <?= ($manualReview['status'] ?? '') === 'reviewed' ? 'revisado' : 'pendente'; ?>
@@ -236,37 +338,152 @@ $exportFormats = [
         <?php if ($normalized === null): ?>
             <p class="empty-state">Nenhum dado normalizado foi salvo para este arquivo.</p>
         <?php else: ?>
+            <?php if ($manualReviewPending): ?>
+                <div class="alert warning">
+                    Conclua a revisao manual dos campos pendentes antes de exportar o arquivo final.
+                </div>
+            <?php endif; ?>
+
             <div class="export-actions">
                 <?php foreach ($exportFormats as $format => $options): ?>
-                    <?php if ($options['available']): ?>
+                    <?php if ($options['available'] && !$manualReviewPending): ?>
                         <a class="button-secondary" href="export.php?id=<?= (int) $uploadId; ?>&format=<?= htmlspecialchars($format, ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($options['label'], ENT_QUOTES, 'UTF-8'); ?></a>
                     <?php else: ?>
-                        <span class="button-secondary button-disabled" title="Indisponivel no ambiente atual"><?= htmlspecialchars($options['label'], ENT_QUOTES, 'UTF-8'); ?></span>
+                        <span class="button-secondary button-disabled" title="<?= $manualReviewPending ? 'Conclua a revisao manual antes de exportar' : 'Indisponivel no ambiente atual'; ?>"><?= htmlspecialchars($options['label'], ENT_QUOTES, 'UTF-8'); ?></span>
                     <?php endif; ?>
                 <?php endforeach; ?>
             </div>
 
-            <div class="table-wrapper">
-                <table>
-                    <thead>
-                    <tr>
-                        <?php foreach ($columns as $column): ?>
-                            <th><?= htmlspecialchars((string) $column, ENT_QUOTES, 'UTF-8'); ?></th>
+            <?php if ($presentation !== null && $presentationSummary !== []): ?>
+                <div class="structured-preview">
+                    <div class="structured-preview-header">
+                        <div>
+                            <p class="eyebrow">Informacoes identificadas</p>
+                            <h3><?= htmlspecialchars($presentationTitle, ENT_QUOTES, 'UTF-8'); ?></h3>
+                        </div>
+                        <span><?= count($rows); ?> item(ns) organizado(s)</span>
+                    </div>
+
+                    <div class="structured-summary-grid">
+                        <?php foreach ($presentationSummary as $summaryItem): ?>
+                            <?php if (is_array($summaryItem)): ?>
+                                <article class="structured-summary-card">
+                                    <strong><?= htmlspecialchars((string) ($summaryItem['label'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></strong>
+                                    <span><?= htmlspecialchars((string) ($summaryItem['value'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></span>
+                                </article>
+                            <?php endif; ?>
                         <?php endforeach; ?>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    <?php foreach (array_slice($rows, 0, $previewRows, true) as $rowIndex => $row): ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <div class="table-toolbar">
+                <div>
+                    <strong>Visualizacao da tabela</strong>
+                    <span>
+                        Mostrando <?= (int) $previewShowingStart; ?>-<?= (int) $previewShowingEnd; ?>
+                        de <?= (int) $filteredRowCount; ?> linha(s)
+                        <?php if ($previewFilter === 'review'): ?>
+                            com baixa confianca
+                        <?php endif; ?>
+                    </span>
+                    <?php if ($reviewCellCount > 0): ?>
+                        <small><?= (int) $reviewCellCount; ?> celula(s) em <?= (int) $reviewRowCount; ?> linha(s) marcada(s) para revisao.</small>
+                    <?php endif; ?>
+                </div>
+
+                <form action="file.php" method="get" class="table-filter-form">
+                    <input type="hidden" name="id" value="<?= (int) $uploadId; ?>">
+                    <input type="hidden" name="preview_page" value="1">
+
+                    <label>
+                        Filtro
+                        <select name="preview_filter">
+                            <option value="all" <?= $previewFilter === 'all' ? 'selected' : ''; ?>>Todas as linhas</option>
+                            <option value="review" <?= $previewFilter === 'review' ? 'selected' : ''; ?>>Somente baixa confianca</option>
+                        </select>
+                    </label>
+
+                    <label>
+                        Linhas por pagina
+                        <select name="preview_limit">
+                            <?php foreach ($previewLimitOptions as $limitOption): ?>
+                                <option value="<?= (int) $limitOption; ?>" <?= $previewLimit === $limitOption ? 'selected' : ''; ?>>
+                                    <?= (int) $limitOption; ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </label>
+
+                    <button type="submit" class="button-secondary">Aplicar</button>
+                </form>
+            </div>
+
+            <?php if ($previewFilter === 'review' && $reviewCellCount === 0): ?>
+                <p class="empty-state">
+                    Nenhuma celula da tabela foi marcada com baixa confianca. Se houver pendencias gerais, elas aparecem no painel de revisao manual acima.
+                </p>
+            <?php elseif ($previewPageRows === []): ?>
+                <p class="empty-state">Nenhuma linha encontrada para os filtros selecionados.</p>
+            <?php else: ?>
+                <div class="table-wrapper preview-table-wrapper">
+                    <table class="data-preview-table">
+                        <thead>
                         <tr>
+                            <th class="row-index-column">Linha</th>
                             <?php foreach ($columns as $column): ?>
-                                <?php $needsReview = isset($reviewCellMap[((int) $rowIndex) . '|' . (string) $column]); ?>
-                                <td class="<?= $needsReview ? 'cell-needs-review' : ''; ?>"><?= htmlspecialchars((string) ($row[$column] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                                <?php $columnKey = (string) $column; ?>
+                                <th class="<?= htmlspecialchars(detail_column_class($columnKey, $quantityColumns), ENT_QUOTES, 'UTF-8'); ?>">
+                                    <?= htmlspecialchars(detail_column_label($columnKey, $columnLabels), ENT_QUOTES, 'UTF-8'); ?>
+                                </th>
                             <?php endforeach; ?>
                         </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($previewPageRows as $rowIndex => $row): ?>
+                            <tr>
+                                <td class="row-index-column"><?= (int) $rowIndex + 1; ?></td>
+                                <?php foreach ($columns as $column): ?>
+                                    <?php
+                                    $columnKey = (string) $column;
+                                    $needsReview = isset($reviewCellMap[((int) $rowIndex) . '|' . $columnKey]);
+                                    $cellClasses = array_filter([
+                                        $needsReview ? 'cell-needs-review' : '',
+                                        detail_column_class($columnKey, $quantityColumns),
+                                    ]);
+                                    ?>
+                                    <td class="<?= htmlspecialchars(implode(' ', $cellClasses), ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars((string) ($row[$columnKey] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                                <?php endforeach; ?>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+
+                <?php if ($previewTotalPages > 1): ?>
+                    <nav class="pagination" aria-label="Paginacao da previa">
+                        <?php if ($previewPage > 1): ?>
+                            <a href="<?= htmlspecialchars(detail_preview_url($uploadId, $previewFilter, $previewLimit, $previewPage - 1), ENT_QUOTES, 'UTF-8'); ?>">Anterior</a>
+                        <?php else: ?>
+                            <span class="is-disabled">Anterior</span>
+                        <?php endif; ?>
+
+                        <?php foreach ($paginationPages as $paginationPage): ?>
+                            <?php if ($paginationPage === $previewPage): ?>
+                                <span class="is-current"><?= (int) $paginationPage; ?></span>
+                            <?php else: ?>
+                                <a href="<?= htmlspecialchars(detail_preview_url($uploadId, $previewFilter, $previewLimit, (int) $paginationPage), ENT_QUOTES, 'UTF-8'); ?>"><?= (int) $paginationPage; ?></a>
+                            <?php endif; ?>
+                        <?php endforeach; ?>
+
+                        <?php if ($previewPage < $previewTotalPages): ?>
+                            <a href="<?= htmlspecialchars(detail_preview_url($uploadId, $previewFilter, $previewLimit, $previewPage + 1), ENT_QUOTES, 'UTF-8'); ?>">Proxima</a>
+                        <?php else: ?>
+                            <span class="is-disabled">Proxima</span>
+                        <?php endif; ?>
+                    </nav>
+                <?php endif; ?>
+            <?php endif; ?>
         <?php endif; ?>
     </section>
 
