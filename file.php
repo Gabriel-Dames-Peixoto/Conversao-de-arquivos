@@ -48,6 +48,26 @@ function detail_column_class(string $column, array $quantityColumns): string
     return implode(' ', $classes);
 }
 
+function detail_status_label(string $status): string
+{
+    $labels = [
+        'processed' => 'processado',
+        'processed_with_warning' => 'processado com aviso',
+        'failed' => 'falhou',
+        'unsupported' => 'nao suportado',
+        'archived_missing' => 'arquivado: arquivo ausente',
+        'reviewed' => 'revisado',
+        'pending' => 'pendente',
+        'success' => 'sucesso',
+        'warning' => 'aviso',
+        'error' => 'erro',
+        'processing' => 'processando',
+        'completed' => 'concluido',
+    ];
+
+    return $labels[$status] ?? $status;
+}
+
 $databaseError = $bootstrap['database_error'];
 
 if ($databaseError !== null) {
@@ -231,7 +251,7 @@ $exportFormats = [
         <div class="detail-grid">
             <div class="detail-card">
                 <strong>Status</strong>
-                <span class="badge badge-<?= htmlspecialchars($upload['status'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($upload['status'], ENT_QUOTES, 'UTF-8'); ?></span>
+                <span class="badge badge-<?= htmlspecialchars($upload['status'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars(detail_status_label((string) $upload['status']), ENT_QUOTES, 'UTF-8'); ?></span>
             </div>
             <div class="detail-card">
                 <strong>Tipo detectado</strong>
@@ -508,7 +528,7 @@ $exportFormats = [
                         <tr>
                             <td><?= htmlspecialchars($conversionRun['converter_name'], ENT_QUOTES, 'UTF-8'); ?></td>
                             <td><?= htmlspecialchars((string) $conversionRun['detected_type'], ENT_QUOTES, 'UTF-8'); ?></td>
-                            <td><span class="badge badge-<?= htmlspecialchars($conversionRun['status'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($conversionRun['status'], ENT_QUOTES, 'UTF-8'); ?></span></td>
+                            <td><span class="badge badge-<?= htmlspecialchars($conversionRun['status'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars(detail_status_label((string) $conversionRun['status']), ENT_QUOTES, 'UTF-8'); ?></span></td>
                             <td>
                                 <?= htmlspecialchars((string) $conversionRun['message'], ENT_QUOTES, 'UTF-8'); ?>
                                 <?php if (($conversionRun['warnings'] ?? []) !== []): ?>
@@ -538,7 +558,7 @@ $exportFormats = [
                     <article class="timeline-item">
                         <header>
                             <strong><?= htmlspecialchars($log['stage'], ENT_QUOTES, 'UTF-8'); ?></strong>
-                            <span class="badge badge-<?= htmlspecialchars($log['status'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($log['status'], ENT_QUOTES, 'UTF-8'); ?></span>
+                            <span class="badge badge-<?= htmlspecialchars($log['status'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars(detail_status_label((string) $log['status']), ENT_QUOTES, 'UTF-8'); ?></span>
                         </header>
                         <p><?= htmlspecialchars((string) $log['message'], ENT_QUOTES, 'UTF-8'); ?></p>
                         <time><?= htmlspecialchars($log['created_at'], ENT_QUOTES, 'UTF-8'); ?></time>
@@ -567,7 +587,7 @@ $exportFormats = [
                     <?php foreach ($exports as $export): ?>
                         <tr>
                             <td><?= htmlspecialchars($export['format'], ENT_QUOTES, 'UTF-8'); ?></td>
-                            <td><span class="badge badge-<?= htmlspecialchars($export['status'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($export['status'], ENT_QUOTES, 'UTF-8'); ?></span></td>
+                            <td><span class="badge badge-<?= htmlspecialchars($export['status'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars(detail_status_label((string) $export['status']), ENT_QUOTES, 'UTF-8'); ?></span></td>
                             <td><?= htmlspecialchars($export['original_export_name'], ENT_QUOTES, 'UTF-8'); ?></td>
                             <td><?= htmlspecialchars($export['created_at'], ENT_QUOTES, 'UTF-8'); ?></td>
                         </tr>

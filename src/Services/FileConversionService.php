@@ -46,7 +46,7 @@ final class FileConversionService
             ];
 
             return [
-                'status' => 'processed',
+                'status' => 'processed_with_warning',
                 'converter' => 'System',
                 'message' => 'Arquivo vazio recebido e diagnosticado.',
                 'warnings' => ['Arquivo vazio. Nenhum conteudo foi convertido.'],
@@ -59,7 +59,10 @@ final class FileConversionService
         foreach ($this->converters as $converter) {
             if ($converter->supports($detection)) {
                 try {
-                    return $converter->convert($filePath, $detection, $originalFilename);
+                    return $this->normalizeResultStatus(
+                        $converter->convert($filePath, $detection, $originalFilename),
+                        $detection
+                    );
                 } catch (\Throwable $exception) {
                     $metadata = [
                         'original_filename' => $originalFilename,
@@ -71,7 +74,7 @@ final class FileConversionService
                     ];
 
                     return [
-                        'status' => 'processed',
+                        'status' => 'processed_with_warning',
                         'converter' => $converter->getName(),
                         'message' => 'Arquivo recebido e diagnosticado, mas o conteudo nao pode ser convertido automaticamente.',
                         'warnings' => ['Falha de conversao registrada: ' . $exception->getMessage()],
@@ -83,7 +86,32 @@ final class FileConversionService
             }
         }
 
-        return (new UnsupportedFileConverter())->convert($filePath, $detection, $originalFilename);
+        return $this->normalizeResultStatus(
+            (new UnsupportedFileConverter())->convert($filePath, $detection, $originalFilename),
+            $detection
+        );
+    }
+
+    private function normalizeResultStatus(array $result, array $detection): array
+    {
+        if (($result['status'] ?? '') !== 'processed') {
+            return $result;
+        }
+
+        if (
+            ($detection['detected_type'] ?? '') === 'unsupported'
+            || ($result['converter'] ?? '') === 'UnsupportedFileConverter'
+        ) {
+            $result['status'] = 'unsupported';
+
+            return $result;
+        }
+
+        if (($result['warnings'] ?? []) !== []) {
+            $result['status'] = 'processed_with_warning';
+        }
+
+        return $result;
     }
 
     private function diagnosticNormalizedData(array $metadata, string $message): array

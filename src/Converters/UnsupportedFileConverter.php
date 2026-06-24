@@ -27,7 +27,7 @@ final class UnsupportedFileConverter extends AbstractConverter implements Conver
         );
 
         return [
-            'status' => 'processed',
+            'status' => 'unsupported',
             'converter' => $this->getName(),
             'message' => 'Arquivo registrado como metadados porque ainda nao existe conversor para este formato.',
             'warnings' => ["Extensao {$extension} sem conversor de conteudo disponivel no momento."],

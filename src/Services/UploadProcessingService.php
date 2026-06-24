@@ -66,6 +66,7 @@ final class UploadProcessingService
             $conversionResult = $conversionService->convert($storedFile['storage_path'], $detection, $storedFile['original_filename']);
             $conversionResult = (new ImportContextService())->applyToConversionResult($conversionResult, $importContext);
             $conversionResult = $this->attachReadabilityAnalysis($conversionResult);
+            $conversionResult = $this->normalizeReviewStatus($conversionResult);
 
             if ($conversionResult['normalized_data'] !== null) {
                 $normalizedRepository->replaceForUpload($uploadId, $conversionResult['normalized_data']);
@@ -146,6 +147,23 @@ final class UploadProcessingService
         }
 
         $conversionResult['warnings'] = array_values(array_unique($conversionResult['warnings']));
+
+        return $conversionResult;
+    }
+
+    private function normalizeReviewStatus(array $conversionResult): array
+    {
+        $metadata = is_array($conversionResult['metadata'] ?? null) ? $conversionResult['metadata'] : [];
+        $manualReview = is_array($metadata['manual_review'] ?? null) ? $metadata['manual_review'] : null;
+
+        if (
+            $manualReview !== null
+            && ($manualReview['required'] ?? false) === true
+            && ($manualReview['status'] ?? '') !== 'reviewed'
+            && !in_array((string) ($conversionResult['status'] ?? ''), ['failed', 'unsupported'], true)
+        ) {
+            $conversionResult['status'] = 'pending';
+        }
 
         return $conversionResult;
     }

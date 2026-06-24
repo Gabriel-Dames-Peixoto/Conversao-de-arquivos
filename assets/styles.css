@@ -490,6 +490,7 @@ th {
 
 .badge-processed_with_warning,
 .badge-warning,
+.badge-pending,
 .badge-unsupported {
     background: var(--warning-soft);
     color: var(--warning);

@@ -134,7 +134,7 @@ final class ManualReviewService
             'metadata' => $metadata,
         ]);
 
-        $newUploadStatus = 'processed';
+        $newUploadStatus = $status;
         (new UploadedFileRepository())->updateProcessingResult(
             $uploadId,
             $newUploadStatus,
