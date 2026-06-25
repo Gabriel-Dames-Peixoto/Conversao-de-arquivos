@@ -211,6 +211,70 @@ button {
     color: var(--brand);
 }
 
+.detail-info-panel {
+    display: grid;
+    gap: 16px;
+}
+
+.detail-tabs {
+    margin-bottom: 0;
+}
+
+.detail-tab {
+    font: inherit;
+    min-height: 44px;
+}
+
+.detail-tab:focus-visible {
+    outline: 3px solid rgba(11, 110, 79, 0.22);
+    outline-offset: 2px;
+}
+
+.detail-tab-panel[hidden] {
+    display: none;
+}
+
+.detail-tab-panel {
+    display: grid;
+    gap: 14px;
+}
+
+.tab-section-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+}
+
+.tab-section-header h3 {
+    margin: 0;
+    font-size: 1.15rem;
+}
+
+.tab-section-header span {
+    color: var(--muted);
+    font-weight: 700;
+}
+
+.compact-table-wrapper {
+    border: 1px solid rgba(216, 203, 187, 0.9);
+    border-radius: 16px;
+    background: var(--panel-strong);
+}
+
+.compact-info-table {
+    min-width: 760px;
+}
+
+.compact-info-table th,
+.compact-info-table td {
+    padding: 12px 14px;
+}
+
+.compact-info-table td {
+    line-height: 1.45;
+}
+
 .filter-form {
     display: grid;
     gap: 16px;
@@ -265,6 +329,19 @@ button {
     gap: 16px;
     align-items: flex-start;
     margin-bottom: 18px;
+}
+
+.compact-panel-header {
+    align-items: center;
+}
+
+.compact-panel-header h2 {
+    margin-bottom: 0;
+}
+
+.compact-panel-header span {
+    color: var(--muted);
+    font-weight: 700;
 }
 
 .table-wrapper {
@@ -553,14 +630,29 @@ th {
 
 .timeline {
     display: grid;
-    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 12px;
+}
+
+.detail-shell .timeline {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
 .timeline-item header {
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
-    gap: 16px;
+    gap: 8px;
     margin-bottom: 8px;
+}
+
+.timeline-item {
+    min-width: 0;
+}
+
+.timeline-item p {
+    margin: 0 0 12px;
+    overflow-wrap: anywhere;
 }
 
 .timeline-item time {
@@ -578,6 +670,11 @@ th {
 
 .warning-list p {
     margin: 0;
+}
+
+.compact-warning-list {
+    max-width: 840px;
+    padding: 9px 12px;
 }
 
 .export-actions {
@@ -812,6 +909,11 @@ code {
 
     .pagination {
         justify-content: flex-start;
+    }
+
+    .tab-section-header {
+        align-items: flex-start;
+        flex-direction: column;
     }
 
     .review-summary {

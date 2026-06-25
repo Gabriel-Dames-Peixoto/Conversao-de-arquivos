@@ -92,6 +92,30 @@ Aceitos, registrados e ainda nao convertidos:
 - XLS binario legado
 - extensoes desconhecidas
 
+## Parser Prefeitura do Rio
+
+O projeto possui um parser especifico para o TXT padronizado da Prefeitura do Rio em `src/Parsers/PrefeituraRioTxtPedidoParser.php`.
+
+Ele recebe o caminho do arquivo TXT e retorna um lote com:
+
+- cliente `PREFEITURA_RIO`
+- arquivo de origem
+- contrato/controle identificado quando existir no TXT
+- pedidos agrupados por pedido de origem e unidade/cliente
+- cabecalho, itens e informacoes complementares separados
+- datas normalizadas em `YYYY-MM-DD`
+- quantidades normalizadas com decimal em ponto
+- erros de layout e inconsistencias em `erros`
+- avisos nao bloqueantes em `warnings`
+
+O parser nao chama o web service da Senior. A lista `pedidos` retornada fica pronta para uma futura classe de integracao com `gravarPedidos`.
+
+Validacao local:
+
+```bash
+php tools/validate_prefeitura_rio_parser.php
+```
+
 ## Tratamento de erros implementado
 
 O sistema trata explicitamente:

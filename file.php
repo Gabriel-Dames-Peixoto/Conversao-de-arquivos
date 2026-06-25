@@ -121,8 +121,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'manua
 }
 
 $logs = $logRepository->forUpload($uploadId);
+$visibleLogs = array_slice($logs, -5);
+$hiddenLogCount = max(0, count($logs) - count($visibleLogs));
 $exports = $exportRepository->forUpload($uploadId);
 $conversionRuns = $conversionRunRepository->forUpload($uploadId);
+$visibleExports = array_slice($exports, 0, 5);
+$hiddenExportCount = max(0, count($exports) - count($visibleExports));
+$visibleConversionRuns = array_slice($conversionRuns, 0, 5);
+$hiddenConversionRunCount = max(0, count($conversionRuns) - count($visibleConversionRuns));
 $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
 $previewRows = $bootstrap['app_config']['preview_rows'];
@@ -507,96 +513,153 @@ $exportFormats = [
         <?php endif; ?>
     </section>
 
-    <section class="panel">
-        <h2>Execucoes de conversao</h2>
-        <?php if ($conversionRuns === []): ?>
-            <p class="empty-state">Nenhuma execucao de conversao registrada.</p>
-        <?php else: ?>
-            <div class="table-wrapper">
-                <table>
-                    <thead>
-                    <tr>
-                        <th>Conversor</th>
-                        <th>Tipo detectado</th>
-                        <th>Status</th>
-                        <th>Mensagem</th>
-                        <th>Data</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    <?php foreach ($conversionRuns as $conversionRun): ?>
-                        <tr>
-                            <td><?= htmlspecialchars($conversionRun['converter_name'], ENT_QUOTES, 'UTF-8'); ?></td>
-                            <td><?= htmlspecialchars((string) $conversionRun['detected_type'], ENT_QUOTES, 'UTF-8'); ?></td>
-                            <td><span class="badge badge-<?= htmlspecialchars($conversionRun['status'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars(detail_status_label((string) $conversionRun['status']), ENT_QUOTES, 'UTF-8'); ?></span></td>
-                            <td>
-                                <?= htmlspecialchars((string) $conversionRun['message'], ENT_QUOTES, 'UTF-8'); ?>
-                                <?php if (($conversionRun['warnings'] ?? []) !== []): ?>
-                                    <div class="warning-list">
-                                        <?php foreach ($conversionRun['warnings'] as $warning): ?>
-                                            <p><?= htmlspecialchars((string) $warning, ENT_QUOTES, 'UTF-8'); ?></p>
-                                        <?php endforeach; ?>
-                                    </div>
-                                <?php endif; ?>
-                            </td>
-                            <td><?= htmlspecialchars($conversionRun['created_at'], ENT_QUOTES, 'UTF-8'); ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
+    <section class="panel detail-info-panel">
+        <div class="panel-header compact-panel-header">
+            <div>
+                <p class="eyebrow">Registros do arquivo</p>
+                <h2>Informacoes do processamento</h2>
             </div>
-        <?php endif; ?>
-    </section>
+            <span>ate 5 registros por aba</span>
+        </div>
 
-    <section class="panel">
-        <h2>Historico de processamento</h2>
-        <?php if ($logs === []): ?>
-            <p class="empty-state">Nenhum log registrado.</p>
-        <?php else: ?>
-            <div class="timeline">
-                <?php foreach ($logs as $log): ?>
-                    <article class="timeline-item">
-                        <header>
-                            <strong><?= htmlspecialchars($log['stage'], ENT_QUOTES, 'UTF-8'); ?></strong>
-                            <span class="badge badge-<?= htmlspecialchars($log['status'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars(detail_status_label((string) $log['status']), ENT_QUOTES, 'UTF-8'); ?></span>
-                        </header>
-                        <p><?= htmlspecialchars((string) $log['message'], ENT_QUOTES, 'UTF-8'); ?></p>
-                        <time><?= htmlspecialchars($log['created_at'], ENT_QUOTES, 'UTF-8'); ?></time>
-                    </article>
-                <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
-    </section>
+        <div class="tabs detail-tabs" role="tablist" aria-label="Informacoes do processamento">
+            <button class="tab-link detail-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="tab-conversions" data-detail-tab-target="conversions">
+                Execucoes <span><?= count($conversionRuns); ?></span>
+            </button>
+            <button class="tab-link detail-tab" type="button" role="tab" aria-selected="false" aria-controls="tab-history" data-detail-tab-target="history">
+                Historico <span><?= count($logs); ?></span>
+            </button>
+            <button class="tab-link detail-tab" type="button" role="tab" aria-selected="false" aria-controls="tab-exports" data-detail-tab-target="exports">
+                Exportacoes <span><?= count($exports); ?></span>
+            </button>
+        </div>
 
-    <section class="panel">
-        <h2>Arquivos exportados</h2>
-        <?php if ($exports === []): ?>
-            <p class="empty-state">Nenhuma exportacao registrada ainda.</p>
-        <?php else: ?>
-            <div class="table-wrapper">
-                <table>
-                    <thead>
-                    <tr>
-                        <th>Formato</th>
-                        <th>Status</th>
-                        <th>Arquivo</th>
-                        <th>Data</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    <?php foreach ($exports as $export): ?>
-                        <tr>
-                            <td><?= htmlspecialchars($export['format'], ENT_QUOTES, 'UTF-8'); ?></td>
-                            <td><span class="badge badge-<?= htmlspecialchars($export['status'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars(detail_status_label((string) $export['status']), ENT_QUOTES, 'UTF-8'); ?></span></td>
-                            <td><?= htmlspecialchars($export['original_export_name'], ENT_QUOTES, 'UTF-8'); ?></td>
-                            <td><?= htmlspecialchars($export['created_at'], ENT_QUOTES, 'UTF-8'); ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
+        <div class="detail-tab-panel is-active" id="tab-conversions" role="tabpanel" data-detail-tab-panel="conversions">
+            <div class="tab-section-header">
+                <h3>Execucoes de conversao</h3>
+                <?php if ($hiddenConversionRunCount > 0): ?>
+                    <span><?= count($visibleConversionRuns); ?> ultimas de <?= count($conversionRuns); ?> execucoes</span>
+                <?php endif; ?>
             </div>
-        <?php endif; ?>
+
+            <?php if ($conversionRuns === []): ?>
+                <p class="empty-state">Nenhuma execucao de conversao registrada.</p>
+            <?php else: ?>
+                <div class="table-wrapper compact-table-wrapper">
+                    <table class="compact-info-table">
+                        <thead>
+                        <tr>
+                            <th>Conversor</th>
+                            <th>Tipo detectado</th>
+                            <th>Status</th>
+                            <th>Mensagem</th>
+                            <th>Data</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($visibleConversionRuns as $conversionRun): ?>
+                            <tr>
+                                <td><?= htmlspecialchars($conversionRun['converter_name'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td><?= htmlspecialchars((string) $conversionRun['detected_type'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td><span class="badge badge-<?= htmlspecialchars($conversionRun['status'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars(detail_status_label((string) $conversionRun['status']), ENT_QUOTES, 'UTF-8'); ?></span></td>
+                                <td>
+                                    <?= htmlspecialchars((string) $conversionRun['message'], ENT_QUOTES, 'UTF-8'); ?>
+                                    <?php if (($conversionRun['warnings'] ?? []) !== []): ?>
+                                        <div class="warning-list compact-warning-list">
+                                            <?php foreach ($conversionRun['warnings'] as $warning): ?>
+                                                <p><?= htmlspecialchars((string) $warning, ENT_QUOTES, 'UTF-8'); ?></p>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </td>
+                                <td><?= htmlspecialchars($conversionRun['created_at'], ENT_QUOTES, 'UTF-8'); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <div class="detail-tab-panel" id="tab-history" role="tabpanel" data-detail-tab-panel="history" hidden>
+            <div class="tab-section-header">
+                <h3>Historico de processamento</h3>
+                <?php if ($hiddenLogCount > 0): ?>
+                    <span><?= count($visibleLogs); ?> ultimos de <?= count($logs); ?> registros</span>
+                <?php endif; ?>
+            </div>
+
+            <?php if ($logs === []): ?>
+                <p class="empty-state">Nenhum log registrado.</p>
+            <?php else: ?>
+                <div class="timeline">
+                    <?php foreach ($visibleLogs as $log): ?>
+                        <article class="timeline-item">
+                            <header>
+                                <strong><?= htmlspecialchars($log['stage'], ENT_QUOTES, 'UTF-8'); ?></strong>
+                                <span class="badge badge-<?= htmlspecialchars($log['status'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars(detail_status_label((string) $log['status']), ENT_QUOTES, 'UTF-8'); ?></span>
+                            </header>
+                            <p><?= htmlspecialchars((string) $log['message'], ENT_QUOTES, 'UTF-8'); ?></p>
+                            <time><?= htmlspecialchars($log['created_at'], ENT_QUOTES, 'UTF-8'); ?></time>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <div class="detail-tab-panel" id="tab-exports" role="tabpanel" data-detail-tab-panel="exports" hidden>
+            <div class="tab-section-header">
+                <h3>Arquivos exportados</h3>
+                <?php if ($hiddenExportCount > 0): ?>
+                    <span><?= count($visibleExports); ?> ultimos de <?= count($exports); ?> arquivos</span>
+                <?php endif; ?>
+            </div>
+
+            <?php if ($exports === []): ?>
+                <p class="empty-state">Nenhuma exportacao registrada ainda.</p>
+            <?php else: ?>
+                <div class="table-wrapper compact-table-wrapper">
+                    <table class="compact-info-table">
+                        <thead>
+                        <tr>
+                            <th>Formato</th>
+                            <th>Status</th>
+                            <th>Arquivo</th>
+                            <th>Data</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($visibleExports as $export): ?>
+                            <tr>
+                                <td><?= htmlspecialchars($export['format'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td><span class="badge badge-<?= htmlspecialchars($export['status'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars(detail_status_label((string) $export['status']), ENT_QUOTES, 'UTF-8'); ?></span></td>
+                                <td><?= htmlspecialchars($export['original_export_name'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td><?= htmlspecialchars($export['created_at'], ENT_QUOTES, 'UTF-8'); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </div>
     </section>
 </main>
+<script>
+document.querySelectorAll('[data-detail-tab-target]').forEach((tab) => {
+    tab.addEventListener('click', () => {
+        const target = tab.getAttribute('data-detail-tab-target');
+        document.querySelectorAll('[data-detail-tab-target]').forEach((item) => {
+            const isActive = item === tab;
+            item.classList.toggle('is-active', isActive);
+            item.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+        document.querySelectorAll('[data-detail-tab-panel]').forEach((panel) => {
+            const isActive = panel.getAttribute('data-detail-tab-panel') === target;
+            panel.classList.toggle('is-active', isActive);
+            panel.hidden = !isActive;
+        });
+    });
+});
+</script>
 </body>
 </html>
